@@ -76,7 +76,36 @@ function errorResponse(code, message) {
 
 All license activation handlers are registered in `ipc/handlers/licenseActivation.handler.js`.
 
+<Warning>
+**Preload Script Limitation**: Only three handlers are exposed to the renderer process through `window.api.licenseActivation`:
+- `verifyLocalActivation()`
+- `verifyAndActivateKey(productKey)`
+- `findByProductKey(productKey)` (available but not used in current UI)
+
+The CRUD operations below (`findAll`, `findById`, `create`, `update`, `delete`, `deleteAll`) are registered IPC handlers but are NOT exposed through the preload script. They are only accessible internally within the main process or for future development.
+</Warning>
+
+### Exposed Methods (Available to Renderer)
+
+The following methods are accessible from React components via `window.api.licenseActivation`:
+
+#### verifyAndActivateKey
+
+See [Advanced Operations](#verifyandactivatekey-1) section below for full documentation.
+
+#### verifyLocalActivation
+
+See [Advanced Operations](#verifylocalactivation-1) section below for full documentation.
+
+#### findByProductKey
+
+See [Core CRUD Operations](#findbyproductkey-1) section below for documentation.
+
 ### Core CRUD Operations
+
+<Note>
+These handlers are registered but NOT currently exposed through the preload script. They are documented here for reference and future development.
+</Note>
 
 #### findAll
 
@@ -96,12 +125,11 @@ ipcMain.handle('licenseActivation:findAll', () =>
   Array of all license activation records
 </ResponseField>
 
-**Example Usage**:
-```typescript
-const result = await window.api.licenseActivation.findAll();
-if (result.success) {
-    console.log(result.data); // Array of licenses
-}
+**Example Usage** (Internal Only):
+```javascript
+// Not exposed through preload - only accessible within main process
+// Would require adding to contextBridge in preload.js
+ipcRenderer.invoke('licenseActivation:findAll')
 ```
 
 ---
