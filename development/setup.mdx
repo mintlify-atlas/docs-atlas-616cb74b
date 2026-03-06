@@ -1,0 +1,293 @@
+---
+title: Development Setup
+description: Set up your development environment to build and contribute to EGEL Simulator
+---
+
+# Development Setup
+
+This guide will help you set up a local development environment for EGEL Simulator. The application is built with Electron, React, and TypeScript, requiring Node.js and npm for development.
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="node-js">
+    Version 16.x or higher recommended
+  </Card>
+  <Card title="npm" icon="box">
+    Version 8.x or higher (comes with Node.js)
+  </Card>
+  <Card title="Git" icon="git">
+    For cloning the repository
+  </Card>
+  <Card title="Code Editor" icon="code">
+    VS Code or your preferred editor
+  </Card>
+</CardGroup>
+
+<Note>
+  The project uses Electron 27.0.0 which requires Node.js 16.x or higher. Check your Node version with `node --version`.
+</Note>
+
+## Step-by-Step Setup
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the EGEL Simulator repository to your local machine:
+    
+    ```bash
+    git clone https://github.com/R0N7w7/EGEL-simulator.git
+    cd EGEL-simulator
+    ```
+  </Step>
+  
+  <Step title="Install Dependencies">
+    The project has two package.json files—one for the Electron main process and one for the React renderer. Install all dependencies with:
+    
+    <CodeGroup>
+    ```bash npm
+    npm run install:all
+    ```
+    
+    ```bash Manual Installation
+    npm install
+    npm install --prefix renderer
+    ```
+    </CodeGroup>
+    
+    This command installs:
+    - **Root dependencies**: Electron, Sequelize, Supabase client, node-machine-id
+    - **Renderer dependencies**: React, Vite, Tailwind CSS, Zustand, React Router
+  </Step>
+  
+  <Step title="Configure Environment Variables">
+    Create a `.env` file in the project root for Supabase configuration:
+    
+    ```bash .env
+    SUPABASE_URL=your_supabase_project_url
+    SUPABASE_KEY=your_supabase_anon_key
+    SIGNATURE_SECRET=your_signature_secret_key
+    ```
+    
+    <Warning>
+      Never commit the `.env` file to version control. It's included in `.gitignore` by default.
+    </Warning>
+    
+    <Accordion title="Where to get Supabase credentials">
+      1. Go to [supabase.com](https://supabase.com) and sign in
+      2. Create a new project or select an existing one
+      3. Navigate to **Settings** → **API**
+      4. Copy the **Project URL** and **anon/public key**
+    </Accordion>
+  </Step>
+  
+  <Step title="Start Development Mode">
+    Run both the Electron main process and Vite dev server concurrently:
+    
+    ```bash
+    npm run dev
+    ```
+    
+    This command runs:
+    - `electron main/main.js` — Starts the Electron app
+    - `npm --prefix renderer run dev` — Starts Vite dev server on port 5173
+    
+    The Electron window will open automatically and load `http://localhost:5173` with hot module replacement enabled.
+  </Step>
+  
+  <Step title="Verify the Setup">
+    You should see:
+    - The EGEL Simulator window opens with the authentication page
+    - Dev tools are open automatically (disabled in production builds)
+    - Hot reload works when you edit React components
+    - Console logs from both main and renderer processes
+    
+    <Tip>
+      The app creates a SQLite database at `app.getPath('userData')/data.sqlite` on first run. On development systems, this is typically in your user directory under app data.
+    </Tip>
+  </Step>
+</Steps>
+
+## Development Scripts
+
+The project provides several npm scripts for development:
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `install:all` | `npm install && npm install --prefix renderer` | Installs all dependencies for both main and renderer |
+| `dev` | `concurrently -k "npm:dev:*"` | Runs both main and renderer in development mode |
+| `dev:main` | `electron main/main.js` | Runs only the Electron main process |
+| `dev:renderer` | `npm --prefix renderer run dev` | Runs only the Vite dev server |
+| `start` | `electron .` | Starts Electron (requires built renderer) |
+
+<Accordion title="When to use each script">
+  - **`npm run dev`**: Most common—runs the full development environment
+  - **`npm run dev:renderer`**: When working only on React components and UI
+  - **`npm run dev:main`**: When debugging Electron main process issues
+  - **`npm start`**: To test production builds locally (requires running `npm run build:renderer` first)
+</Accordion>
+
+## Development Tools
+
+### Debugging
+
+<Tabs>
+  <Tab title="Renderer Process">
+    The renderer process (React app) opens with Chrome DevTools automatically in development mode:
+    
+    ```typescript main/main.js
+    if (!app.isPackaged) {
+        win.loadURL('http://localhost:5173');
+        win.webContents.openDevTools();
+    }
+    ```
+    
+    Access DevTools with:
+    - **Windows/Linux**: `Ctrl + Shift + I`
+    - **macOS**: `Cmd + Option + I`
+  </Tab>
+  
+  <Tab title="Main Process">
+    Debug the Electron main process by viewing terminal output where you ran `npm run dev`.
+    
+    Add debug logging:
+    
+    ```javascript
+    console.log('Debug info:', someVariable);
+    console.error('Error:', error);
+    ```
+    
+    Or attach a Node.js debugger:
+    
+    ```bash
+    electron --inspect=5858 main/main.js
+    ```
+  </Tab>
+</Tabs>
+
+### Hot Module Replacement
+
+Vite provides instant HMR for React components. Changes to files in `renderer/src/` reload automatically without losing state.
+
+```typescript renderer/vite.config.ts
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react-swc'
+
+export default defineConfig({
+  plugins: [react()],
+  // HMR enabled by default in dev mode
+})
+```
+
+<Note>
+  Changes to main process files (`main/*.js`) require restarting the Electron app. Stop the dev server and run `npm run dev` again.
+</Note>
+
+## Project Dependencies
+
+### Main Process Dependencies
+
+```json package.json
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.51.0",
+    "crypto": "^1.0.1",
+    "dotenv": "^17.2.0",
+    "lucide-react": "^0.525.0",
+    "node-machine-id": "^1.1.12",
+    "sequelize": "^6.37.7",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.0",
+    "electron": "^27.0.0",
+    "electron-builder": "^24.3.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0"
+  }
+}
+```
+
+### Renderer Process Dependencies
+
+```json renderer/package.json
+{
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "lucide-react": "^0.525.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.6.3",
+    "tailwindcss": "^4.1.11",
+    "zustand": "^5.0.6"
+  }
+}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="npm install fails with sqlite3 errors">
+    SQLite3 requires native compilation. If you encounter errors:
+    
+    ```bash
+    # Rebuild sqlite3 for your Electron version
+    npm rebuild sqlite3 --build-from-source
+    
+    # Or install electron-rebuild
+    npm install --save-dev electron-rebuild
+    npx electron-rebuild
+    ```
+  </Accordion>
+  
+  <Accordion title="Electron window shows blank screen">
+    This usually means the Vite dev server isn't running:
+    
+    1. Check that port 5173 is not in use: `lsof -i :5173`
+    2. Restart the dev server: `npm run dev:renderer`
+    3. Check for errors in the terminal
+    4. Open DevTools and check the Console tab
+  </Accordion>
+  
+  <Accordion title="Database errors on startup">
+    The SQLite database may be locked or corrupted:
+    
+    1. Close all instances of the app
+    2. Delete the database file:
+       - **Windows**: `%APPDATA%/egel-simulator/data.sqlite`
+       - **macOS**: `~/Library/Application Support/egel-simulator/data.sqlite`
+       - **Linux**: `~/.config/egel-simulator/data.sqlite`
+    3. Restart the app—a new database will be created
+  </Accordion>
+  
+  <Accordion title="Permission denied errors">
+    If you see EACCES or permission errors:
+    
+    ```bash
+    # Clear npm cache
+    npm cache clean --force
+    
+    # On Unix systems, fix permissions
+    sudo chown -R $(whoami) ~/.npm
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Project Structure" icon="folder-tree" href="/development/project-structure">
+    Understand the codebase organization
+  </Card>
+  <Card title="Building" icon="hammer" href="/development/building">
+    Learn how to build for production
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/advanced/architecture">
+    Explore the technical architecture
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="https://github.com/R0N7w7/EGEL-simulator">
+    Contribute to the project
+  </Card>
+</CardGroup>

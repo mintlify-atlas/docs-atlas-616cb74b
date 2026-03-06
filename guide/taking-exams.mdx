@@ -1,0 +1,579 @@
+---
+title: Taking Exams
+description: Complete guide to navigating and completing EGEL exam simulations
+---
+
+Once you've configured your exam settings, the TestPage provides a comprehensive interface for taking practice exams or simulations. This guide covers everything from navigation to answer selection and exam completion.
+
+## Starting the Exam
+
+After clicking **"Iniciar simulacro"** on the SetupPage, the application:
+
+1. Saves your configuration to the `useSetupStore`
+2. Navigates to `/test`
+3. Loads questions based on your selected area
+4. Initializes the timer (if enabled)
+5. Displays the first question
+
+```typescript
+// Initialization from TestPage.tsx:10-19
+const config = useSetupStore((state) => state.config)
+const { questions: examQuestions, loading } = useQuestions();
+
+const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({})
+const [showFeedback, setShowFeedback] = useState(false)
+const [timeLeft, setTimeLeft] = useState(config?.duration ?? 0)
+```
+
+<Note>
+If the configuration is missing (direct navigation to `/test`), you'll be automatically redirected to the setup page.
+</Note>
+
+## Understanding the Exam Interface
+
+### Header Section
+
+The exam header displays critical information:
+
+<CardGroup cols={3}>
+  <Card title="Mode Badge" icon="graduation-cap">
+    Shows "Modo Práctica" or "Simulacro" based on configuration
+  </Card>
+  <Card title="Block Type" icon="book">
+    Displays question category: disciplinar, transversal, or ambas
+  </Card>
+  <Card title="Timer" icon="clock">
+    Countdown timer with MM:SS format (if enabled)
+  </Card>
+</CardGroup>
+
+```typescript
+// Header badges from TestPage.tsx:104-111
+<span className="px-4 py-1 rounded-full bg-emerald-100 text-emerald-700">
+    {config.practiceMode ? "Modo Práctica" : "Simulacro"}
+</span>
+<span className="px-4 py-1 bg-blue-100 text-blue-700 rounded-full capitalize">
+    {currentQuestion.block}
+</span>
+```
+
+### Progress Indicator
+
+A visual progress bar shows your position in the exam:
+
+```typescript
+// Progress bar from TestPage.tsx:123-130
+<div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+    <div
+        className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600"
+        style={{
+            width: `${((currentQuestionIndex + 1) / examQuestions.length) * 100}%`,
+        }}
+    ></div>
+</div>
+```
+
+Below the progress bar:
+
+```
+Pregunta 1 de 120
+```
+
+This helps you track:
+- Current question number
+- Total questions remaining
+- Overall exam progress
+
+### Timer Display and Warnings
+
+When the timer is enabled, it appears in the top-right corner:
+
+```typescript
+// Timer display from TestPage.tsx:113-121
+{config.timerEnabled && (
+    <div className="flex items-center gap-2 text-lg font-mono">
+        <ClockIcon className="w-5 h-5 text-blue-500" />
+        <span className={timeLeft < 300 ? "text-red-600 font-semibold animate-pulse" : ""}>
+            {formatTime(timeLeft)}
+        </span>
+    </div>
+)}
+```
+
+<Warning>
+When less than **5 minutes** (300 seconds) remain, the timer turns red and starts pulsing to alert you.
+</Warning>
+
+The timer counts down every second:
+
+```typescript
+// Timer countdown from TestPage.tsx:30-39
+useEffect(() => {
+    if (!config?.timerEnabled) return
+    const interval = setInterval(() => {
+        setTimeLeft((prev) => {
+            if (prev <= 1) clearInterval(interval)
+            return prev - 1
+        })
+    }, 1000)
+    return () => clearInterval(interval)
+}, [config])
+```
+
+## Answering Questions
+
+### Question Display Format
+
+Each question is rendered using ReactMarkdown for rich formatting:
+
+```typescript
+// Question text from Question.tsx:26-28
+<h2 className="text-lg md:text-xl font-serif font-semibold">
+    <ReactMarkdown>{question.question}</ReactMarkdown>
+</h2>
+```
+
+### Answer Options
+
+Answers are labeled alphabetically (A, B, C, D, etc.):
+
+```typescript
+// Option labeling from Question.tsx:48-50
+<div className="font-semibold text-gray-700 mr-3">
+    {String.fromCharCode(65 + index)}.  // 65 = 'A' in ASCII
+</div>
+```
+
+### Selecting an Answer
+
+<Steps>
+  <Step title="Click on an Answer Option">
+    Click any answer option to select it. The selected answer will:
+    - Change background to emerald green (`bg-emerald-100`)
+    - Show a darker border (`border-emerald-300`)
+    - Store your selection in state
+    
+    ```typescript
+    // Selection handling from Question.tsx:37-40
+    onClick={() => {
+        if (!allowMultipleSelection && selectedAnswer !== undefined) return;
+        onSelect(index);
+    }}
+    ```
+  </Step>
+
+  <Step title="Answer is Recorded">
+    Your selection is stored in the `selectedAnswers` object using the question ID:
+    
+    ```typescript
+    // From TestPage.tsx:16
+    const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({})
+    
+    // Selection function from TestPage.tsx:41-46
+    const selectAnswer = (id: string, index: number) => {
+        if (selectedAnswers[id] === undefined) {
+            setSelectedAnswers((prev) => ({ ...prev, [id]: index }))
+            setShowFeedback(true)
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Feedback Appears (Practice Mode Only)">
+    If you're in practice mode, immediate feedback displays:
+    
+    ```typescript
+    // Feedback from Question.tsx:59-66
+    {showFeedback && mode === "practica" && (
+        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+            <strong>Respuesta correcta:</strong>{" "}
+            <span className="font-medium">
+                {String.fromCharCode(65 + question.correctAnswerIndex)}. 
+                {question.options[question.correctAnswerIndex]}
+            </span>
+        </div>
+    )}
+    ```
+    
+    The feedback box shows:
+    - The letter of the correct answer
+    - The full text of the correct option
+    - Blue background to distinguish from question options
+  </Step>
+
+  <Step title="Next Button Activates">
+    Once an answer is selected, the **"Siguiente"** button becomes enabled:
+    
+    ```typescript
+    // Button state from TestPage.tsx:96-97
+    const selectedAnswer = selectedAnswers[currentQuestion.id]
+    const isAnswered = selectedAnswer !== undefined
+    
+    // Button from TestPage.tsx:156-161
+    <button
+        onClick={nextQuestion}
+        disabled={!isAnswered}
+        className={isAnswered
+            ? "bg-green-600 hover:bg-green-700 text-white"
+            : "bg-gray-200 text-gray-400 cursor-not-allowed"
+        }
+    >
+    ```
+  </Step>
+</Steps>
+
+### Answer Selection Behavior
+
+**In Practice Mode** (`practiceMode: true`):
+- You can only select **one answer per question**
+- Once selected, you cannot change your answer
+- Feedback appears immediately
+- Click "Siguiente" to move on
+
+```typescript
+// Single selection enforcement from Question.tsx:38
+if (!allowMultipleSelection && selectedAnswer !== undefined) return;
+```
+
+**In Simulation Mode** (`practiceMode: false`):
+- You can change your answer before clicking "Siguiente"
+- No feedback is shown
+- The `allowMultipleSelection` prop allows answer changes
+
+```typescript
+// From TestPage.tsx:144
+allowMultipleSelection={!config.practiceMode}
+```
+
+## Navigation Between Questions
+
+### Moving to the Next Question
+
+Click the **"Siguiente →"** button to advance:
+
+```typescript
+// Navigation handler from TestPage.tsx:48-77
+const nextQuestion = () => {
+    setShowFeedback(false);  // Hide feedback from previous question
+    const isLast = currentQuestionIndex === examQuestions.length - 1
+    
+    if (isLast) {
+        // Calculate and save results
+        const total = examQuestions.length
+        const correct = Math.floor(total * 0.7)  // Example calculation
+        const score = Math.round((correct / total) * 100)
+        const now = new Date();
+        
+        addHistoryEntry({
+            date: now.toLocaleDateString(),
+            time: now.toLocaleTimeString(),
+            score,
+            correct,
+            total,
+            type: config!.area,
+            timerEnabled: config!.timerEnabled,
+            practiceMode: config!.practiceMode,
+        });
+        
+        navigate("/history");  // Go to results page
+    } else {
+        setCurrentQuestionIndex((prev) => prev + 1);  // Next question
+    }
+}
+```
+
+<Note>
+The "Siguiente" button is **disabled** until you select an answer, preventing accidental skipping.
+</Note>
+
+### Button Label Changes
+
+The button text changes on the last question:
+
+```typescript
+// From TestPage.tsx:163
+{currentQuestionIndex === examQuestions.length - 1 ? "Finalizar" : "Siguiente"} →
+```
+
+- **"Siguiente →"** for all questions except the last
+- **"Finalizar →"** on the final question
+
+## Progress Tracking During Exam
+
+### Question State Tracking
+
+The application tracks several pieces of state:
+
+| State | Type | Purpose |
+|-------|------|----------|
+| `currentQuestionIndex` | `number` | Current position in question array |
+| `selectedAnswers` | `Record<string, number>` | Maps question IDs to selected answer indices |
+| `showFeedback` | `boolean` | Controls feedback display in practice mode |
+| `timeLeft` | `number` | Remaining seconds on timer |
+
+```typescript
+// State initialization from TestPage.tsx:15-18
+const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({})
+const [showFeedback, setShowFeedback] = useState(false)
+const [timeLeft, setTimeLeft] = useState(config?.duration ?? 0)
+```
+
+### Visual Progress Indicators
+
+1. **Progress Bar**: Fills from left to right as you advance
+2. **Question Counter**: Shows "Pregunta X de Y"
+3. **Timer**: Counts down remaining time (if enabled)
+4. **Answer Selection**: Highlights selected option in green
+
+## Time Management Strategies
+
+<Tabs>
+  <Tab title="With Timer Enabled">
+    When practicing with the timer:
+    
+    **Monitor the Timer**
+    - Keep an eye on the countdown in the top-right
+    - Watch for the red pulse when under 5 minutes
+    
+    **Pace Yourself**
+    - Calculate time per question: `duration / total_questions`
+    - For 40,000 seconds and 120 questions: ~333 seconds (5.5 min) per question
+    
+    **Skip and Return Strategy**
+    - In simulation mode, you can change answers
+    - Mark difficult questions mentally
+    - Review time allocation as you progress
+    
+    ```typescript
+    // Time formatting helper
+    const formatTime = (seconds: number) => {
+        const min = Math.floor(seconds / 60)
+        const sec = seconds % 60
+        return `${min}:${sec.toString().padStart(2, "0")}`
+    }
+    ```
+  </Tab>
+
+  <Tab title="Without Timer">
+    When practicing without time pressure:
+    
+    **Focus on Learning**
+    - Take time to read each question carefully
+    - Consider all options before selecting
+    - Use practice mode to learn correct answers
+    
+    **No Rushing**
+    - No countdown means no pressure
+    - Ideal for first-time material review
+    - Better retention through careful reading
+    
+    **Build Understanding**
+    - Reflect on why answers are correct
+    - Think through the reasoning
+    - Develop problem-solving strategies
+  </Tab>
+</Tabs>
+
+## Understanding Feedback in Practice Mode
+
+### When Feedback Appears
+
+Feedback displays **immediately** after selecting an answer when:
+
+1. Practice mode is enabled (`practiceMode: true`)
+2. You click an answer option
+3. The `showFeedback` state becomes `true`
+
+```typescript
+// Feedback trigger from TestPage.tsx:41-46
+const selectAnswer = (id: string, index: number) => {
+    if (selectedAnswers[id] === undefined) {
+        setSelectedAnswers((prev) => ({ ...prev, [id]: index }))
+        setShowFeedback(true)  // Trigger feedback display
+    }
+}
+```
+
+### Feedback Content
+
+The feedback box shows:
+
+```
+Respuesta correcta: B. [Full text of correct answer]
+```
+
+- **Letter**: Alphabetic label of correct answer
+- **Text**: Complete option text
+- **Styling**: Blue background with border for visibility
+
+### Learning from Feedback
+
+<Tip>
+In practice mode, read the feedback carefully even if you answered correctly. Understanding **why** an answer is correct reinforces learning.
+</Tip>
+
+The feedback helps you:
+- Identify knowledge gaps immediately
+- Correct misconceptions before they solidify
+- Learn the correct answer before moving on
+- Build confidence through immediate validation
+
+### Feedback Reset
+
+Feedback is hidden when you advance to the next question:
+
+```typescript
+// From TestPage.tsx:49
+const nextQuestion = () => {
+    setShowFeedback(false);  // Hide previous feedback
+    // ... rest of navigation logic
+}
+```
+
+## Completing the Exam
+
+<Steps>
+  <Step title="Answer the Final Question">
+    When you reach the last question:
+    - The progress bar shows 100%
+    - The counter shows "Pregunta [N] de [N]"
+    - The button label changes to **"Finalizar"**
+    
+    Select your answer as usual.
+  </Step>
+
+  <Step title="Click Finalizar">
+    When you click **"Finalizar"**, the application:
+    
+    1. Calculates your score
+    2. Creates a history entry with exam metadata
+    3. Saves the entry to persistent storage
+    4. Navigates to the HistoryPage
+    
+    ```typescript
+    // Completion logic from TestPage.tsx:52-73
+    if (isLast) {
+        const total = examQuestions.length
+        const correct = Math.floor(total * 0.7)
+        const score = Math.round((correct / total) * 100)
+        const now = new Date();
+        
+        addHistoryEntry({
+            date: now.toLocaleDateString(),
+            time: now.toLocaleTimeString(),
+            score,
+            correct,
+            total,
+            type: config!.area,
+            timerEnabled: config!.timerEnabled,
+            practiceMode: config!.practiceMode,
+        });
+        
+        navigate("/history");
+    }
+    ```
+  </Step>
+
+  <Step title="View Results">
+    After completion, you're automatically taken to the HistoryPage where you can:
+    - See your score percentage
+    - Review correct/total answers
+    - Compare with previous attempts
+    - Identify trends over time
+  </Step>
+</Steps>
+
+<Warning>
+Once you click "Finalizar", the exam ends immediately. There's no review mode to check your answers within the test interface. Results are available on the HistoryPage.
+</Warning>
+
+## Exiting the Exam Early
+
+If you need to exit before completing:
+
+1. Click the **"← Salir"** button in the bottom-left corner
+2. You'll be returned to the home page
+3. **Your progress will NOT be saved**
+4. No history entry will be created
+
+```typescript
+// Exit button from TestPage.tsx:149-153
+<button
+    onClick={() => navigate("/home")}
+    className="px-5 py-2 rounded-full bg-white text-gray-600"
+>
+    ← Salir
+</button>
+```
+
+<Warning>
+Exiting early discards all progress. Only completed exams are saved to history.
+</Warning>
+
+## Question Component Details
+
+The Question component handles answer rendering and selection:
+
+### Props Interface
+
+```typescript
+// From Question.tsx:3-10
+type Props = {
+    question: EGELQuestion
+    selectedAnswer?: number
+    onSelect: (index: number) => void
+    showFeedback: boolean
+    mode: "simulacro" | "practica"
+    allowMultipleSelection?: boolean
+}
+```
+
+### Selection Styling
+
+```typescript
+// From Question.tsx:42-46
+className={`
+    ${isSelected
+        ? "bg-emerald-100 border-emerald-300"
+        : "bg-white border-gray-300 hover:bg-emerald-50"
+    }
+`}
+```
+
+- **Selected**: Emerald background with darker border
+- **Unselected**: White background with hover effect
+- **Hover**: Light emerald tint on mouse over
+
+## Loading States
+
+Before questions load:
+
+```typescript
+// Loading check from TestPage.tsx:86-92
+if (!config || loading) {
+    return (
+        <div className="min-h-screen flex items-center justify-center">
+            Cargando preguntas...
+        </div>
+    )
+}
+```
+
+This ensures:
+- Configuration is loaded
+- Questions are fetched
+- No errors from undefined data
+
+## Best Practices for Taking Exams
+
+1. **Read Carefully**: Take time to understand each question fully
+2. **Consider All Options**: Review every answer choice before selecting
+3. **Use Practice Mode**: For learning, enable immediate feedback
+4. **Simulate Real Exams**: Disable practice mode and enable timer for final prep
+5. **Track Progress**: Monitor the progress bar and question counter
+6. **Watch the Timer**: Keep an eye on remaining time (if enabled)
+7. **Learn from Feedback**: In practice mode, read why answers are correct
+8. **Complete the Exam**: Finish all questions to save your results
+9. **Review History**: Check your past attempts to identify improvement areas

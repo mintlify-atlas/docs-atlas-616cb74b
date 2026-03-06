@@ -1,0 +1,250 @@
+---
+title: Installation
+description: Install and set up EGEL Simulator on your system
+---
+
+EGEL Simulator is an Electron desktop application that provides a complete EGEL exam practice environment. This guide covers installation for end users and setup for developers.
+
+## System Requirements
+
+Before installing EGEL Simulator, ensure your system meets the following requirements:
+
+- **Operating System**: Windows 10/11, macOS 10.13+, or Linux (Ubuntu 18.04+, Fedora 32+)
+- **Memory**: 4 GB RAM minimum (8 GB recommended)
+- **Storage**: 500 MB available disk space
+- **Display**: 1280x720 minimum resolution
+- **Runtime**: Electron 27.0.0 (bundled with the application)
+
+<Note>
+The application uses hardware acceleration disabled by default for better compatibility. It will run on systems with or without dedicated graphics cards.
+</Note>
+
+## Installing the Desktop Application
+
+The EGEL Simulator desktop application is distributed as a standalone installer for your platform.
+
+<Steps>
+  <Step title="Download the installer">
+    Download the appropriate installer for your operating system:
+    
+    - **Windows**: `EGEL-Simulator-Setup-1.0.0.exe`
+    - **macOS**: `EGEL-Simulator-1.0.0.dmg`
+    - **Linux**: `EGEL-Simulator-1.0.0.AppImage` or `.deb` package
+  </Step>
+
+  <Step title="Run the installer">
+    **Windows**: Double-click the `.exe` file and follow the installation wizard.
+    
+    **macOS**: Open the `.dmg` file, drag the application to your Applications folder.
+    
+    **Linux** (AppImage):
+    ```bash
+    chmod +x EGEL-Simulator-1.0.0.AppImage
+    ./EGEL-Simulator-1.0.0.AppImage
+    ```
+    
+    **Linux** (Debian/Ubuntu):
+    ```bash
+    sudo dpkg -i EGEL-Simulator-1.0.0.deb
+    ```
+  </Step>
+
+  <Step title="Launch the application">
+    Launch EGEL Simulator from your applications menu or desktop shortcut. The application window will open at 900x700 pixels by default and is fully resizable (minimum 400x500).
+  </Step>
+
+  <Step title="Activate your license">
+    On first launch, you'll be prompted to enter your product key. See the [Quickstart guide](/quickstart) for activation instructions.
+  </Step>
+</Steps>
+
+<Warning>
+The application menu bar is hidden by default for a cleaner interface. Use keyboard shortcuts or in-app navigation to access all features.
+</Warning>
+
+## Development Setup
+
+For developers who want to run EGEL Simulator from source or contribute to the project, follow these instructions.
+
+### Prerequisites
+
+Ensure you have the following tools installed:
+
+- **Node.js**: Version 18.x or higher
+- **npm**: Version 9.x or higher (comes with Node.js)
+
+<CodeGroup>
+```bash npm
+# Check Node.js version
+node --version
+
+# Check npm version
+npm --version
+```
+
+```bash yarn
+# Check Node.js version
+node --version
+
+# Check Yarn version
+yarn --version
+```
+</CodeGroup>
+
+### Clone and Install
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the EGEL Simulator repository to your local machine:
+    
+    ```bash
+    git clone https://github.com/your-org/egel-simulator.git
+    cd egel-simulator/source
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    The project has a monorepo structure with a main Electron process and a React renderer. Install all dependencies:
+    
+    <CodeGroup>
+    ```bash npm
+    npm run install:all
+    ```
+    
+    ```bash manual
+    # Install main process dependencies
+    npm install
+    
+    # Install renderer dependencies
+    npm install --prefix renderer
+    ```
+    </CodeGroup>
+    
+    This installs:
+    - **Main process**: Electron, Supabase client, Sequelize (SQLite), node-machine-id
+    - **Renderer**: React 19, Vite, React Router, Zustand, TailwindCSS, Lucide icons
+  </Step>
+
+  <Step title="Configure environment variables">
+    Create a `.env` file in the `source/` directory with your Supabase credentials:
+    
+    ```bash .env
+    SUPABASE_URL=your_supabase_project_url
+    SUPABASE_ANON_KEY=your_supabase_anon_key
+    ```
+    
+    <Note>
+    These credentials are required for license activation. Contact your administrator for the correct values.
+    </Note>
+  </Step>
+
+  <Step title="Run the development server">
+    Start the development environment with hot-reloading:
+    
+    ```bash
+    npm run dev
+    ```
+    
+    This command starts two processes concurrently:
+    - **Vite dev server** on `http://localhost:5173` (renderer)
+    - **Electron main process** loading the dev server
+    
+    The application window opens automatically with DevTools enabled.
+  </Step>
+</Steps>
+
+### Development Scripts
+
+The following npm scripts are available for development:
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start development mode with hot-reloading |
+| `npm run dev:main` | Run only the Electron main process |
+| `npm run dev:renderer` | Run only the Vite dev server |
+| `npm start` | Start the application in production mode |
+| `npm run build:renderer` | Build the React renderer for production |
+| `npm run build:main` | Build the Electron app with electron-builder |
+| `npm run build` | Build renderer and package the full application |
+
+### Project Structure
+
+The EGEL Simulator codebase is organized as follows:
+
+```
+source/
+├── main/
+│   ├── main.js          # Electron main process entry point
+│   ├── preload.js       # Preload script for IPC communication
+│   ├── db/              # Sequelize models and database config
+│   └── ipc/             # IPC handlers for renderer communication
+├── renderer/
+│   ├── src/
+│   │   ├── App.tsx      # React app root component
+│   │   ├── routes/      # React Router configuration
+│   │   ├── pages/       # Page components (Auth, Home, Setup, Test, History)
+│   │   └── features/    # Feature modules (auth, EGEL exam logic)
+│   ├── package.json     # Renderer dependencies
+│   └── vite.config.ts   # Vite configuration
+└── package.json         # Main dependencies and scripts
+```
+
+<Tip>
+The main process runs Node.js code with access to the file system and SQLite database. The renderer process is a sandboxed React app that communicates with the main process via IPC.
+</Tip>
+
+## Building for Production
+
+To create distributable packages for different platforms:
+
+<Steps>
+  <Step title="Build the renderer">
+    Compile the React application:
+    
+    ```bash
+    npm run build:renderer
+    ```
+    
+    This creates an optimized production build in `renderer/dist/`.
+  </Step>
+
+  <Step title="Package the application">
+    Use electron-builder to create platform-specific installers:
+    
+    ```bash
+    npm run build
+    ```
+    
+    This command:
+    1. Builds the renderer (if not already built)
+    2. Packages the Electron app with electron-builder
+    3. Creates installers in the `dist/` directory
+  </Step>
+</Steps>
+
+<Note>
+electron-builder will create installers for your current platform by default. Cross-platform builds require additional configuration.
+</Note>
+
+## Troubleshooting
+
+### Application won't start
+
+- **Check Node.js version**: Ensure you're running Node.js 18.x or higher
+- **Clear node_modules**: Delete `node_modules` folders and run `npm run install:all` again
+- **Check for port conflicts**: The dev server runs on port 5173; ensure it's available
+
+### Database errors on startup
+
+- **Delete the database file**: The SQLite database is created automatically on first run. If corrupted, delete it and restart the app
+- **Check file permissions**: Ensure the application has write access to its data directory
+
+### License activation fails
+
+- **Verify .env configuration**: Ensure `SUPABASE_URL` and `SUPABASE_ANON_KEY` are set correctly
+- **Check network connection**: License activation requires internet access
+- **Validate product key format**: Keys must be valid UUIDs in the format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+
+## Next Steps
+
+Now that you have EGEL Simulator installed, follow the [Quickstart guide](/quickstart) to activate your license and take your first practice exam.

@@ -1,0 +1,580 @@
+---
+title: Database Schema
+description: Complete reference for EGEL Simulator's SQLite database schema, models, and service methods
+---
+
+## Overview
+
+EGEL Simulator uses SQLite as its local database, managed through Sequelize ORM. The database stores license activation records and maintains data integrity through cryptographic signatures.
+
+## Database Configuration
+
+The database is initialized in `main/db/index.js`:
+
+```javascript
+const path = require('path');
+const { app } = require('electron');
+const { Sequelize } = require('sequelize');
+const createLicenseActivationModel = require('./models/LicenseActivation.js');
+
+const isElectron = process.versions.hasOwnProperty('electron');
+
+const storagePath = isElectron
+    ? path.join(app.getPath('userData'), 'data.sqlite')
+    : path.join(__dirname, 'data.sqlite');
+
+const sequelize = new Sequelize({
+    dialect: 'sqlite',
+    storage: storagePath,
+    logging: false,
+});
+
+const LicenseActivation = createLicenseActivationModel(sequelize);
+
+module.exports = {
+    sequelize,
+    LicenseActivation,
+};
+```
+
+### Configuration Parameters
+
+<ParamField path="dialect" type="string" default="sqlite">
+  Database type (SQLite for Electron local storage)
+</ParamField>
+
+<ParamField path="storage" type="string">
+  Database file location. Uses Electron's `userData` directory in production, or local `__dirname` in tests.
+</ParamField>
+
+<ParamField path="logging" type="boolean" default="false">
+  Disables SQL query logging for cleaner console output
+</ParamField>
+
+<Note>
+  The database file path is automatically determined:
+  - **Production**: `~/AppData/Roaming/egel-simulator/data.sqlite` (Windows)
+  - **Production**: `~/Library/Application Support/egel-simulator/data.sqlite` (macOS)
+  - **Development**: `main/db/data.sqlite`
+</Note>
+
+## LicenseActivation Model
+
+The `LicenseActivation` model stores local license activation records.
+
+### Model Definition
+
+```javascript
+const { DataTypes } = require('sequelize');
+
+function createLicenseActivationModel(sequelize) {
+    return sequelize.define('LicenseActivation', {
+        id: {
+            type: DataTypes.INTEGER,
+            primaryKey: true,
+            autoIncrement: true,
+        },
+        productKey: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            unique: true,
+        },
+        machineId: {
+            type: DataTypes.STRING,
+            allowNull: false,
+        },
+        careerId: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        activatedAt: {
+            type: DataTypes.DATE,
+            defaultValue: DataTypes.NOW,
+        },
+        signature: {
+            type: DataTypes.TEXT,
+            allowNull: true,
+        },
+    }, {
+        tableName: 'license_activations',
+        timestamps: false,
+    });
+}
+
+module.exports = createLicenseActivationModel;
+```
+
+### Schema Fields
+
+<ParamField path="id" type="INTEGER" required>
+  Primary key, auto-incremented unique identifier
+</ParamField>
+
+<ParamField path="productKey" type="STRING" required>
+  Unique product key for the license. **Unique constraint** prevents duplicate activations.
+</ParamField>
+
+<ParamField path="machineId" type="STRING" required>
+  Hardware-based machine identifier from `node-machine-id`. Binds license to specific device.
+</ParamField>
+
+<ParamField path="careerId" type="STRING">
+  Optional career/course identifier for organizing licenses by program
+</ParamField>
+
+<ParamField path="activatedAt" type="DATE" default="NOW()">
+  Timestamp when the license was activated locally
+</ParamField>
+
+<ParamField path="signature" type="TEXT">
+  HMAC-SHA256 signature for verifying license data integrity. Generated from `{ productKey, machineId }`.
+</ParamField>
+
+### Table Configuration
+
+<ParamField path="tableName" type="string" default="license_activations">
+  Explicit table name in SQLite database
+</ParamField>
+
+<ParamField path="timestamps" type="boolean" default="false">
+  Disables automatic `createdAt` and `updatedAt` fields
+</ParamField>
+
+## SQL Schema
+
+The equivalent SQL schema for the `license_activations` table:
+
+```sql
+CREATE TABLE license_activations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    productKey VARCHAR(255) NOT NULL UNIQUE,
+    machineId VARCHAR(255) NOT NULL,
+    careerId VARCHAR(255),
+    activatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    signature TEXT
+);
+
+CREATE UNIQUE INDEX idx_product_key ON license_activations(productKey);
+```
+
+### Indexes
+
+- **Primary Key Index**: Automatically created on `id`
+- **Unique Index**: Automatically created on `productKey` due to unique constraint
+
+<Note>
+  The `productKey` unique constraint ensures a license can only be activated once locally, preventing duplicate entries.
+</Note>
+
+## LicenseActivationService
+
+The service layer provides business logic for interacting with the database.
+
+### Service Implementation
+
+```javascript
+const db = require('../db/index.js');
+
+class LicenseActivationService {
+    // ... methods below
+}
+
+const licenseActivationService = new LicenseActivationService();
+
+module.exports = { licenseActivationService };
+```
+
+### Service Methods
+
+#### create
+
+Creates a new license activation record.
+
+```javascript
+async create(data) {
+    const activation = await db.LicenseActivation.create(data);
+    return activation.get({ plain: true });
+}
+```
+
+<ParamField path="data" type="Object" required>
+  License activation data
+</ParamField>
+
+<ParamField path="data.productKey" type="string" required>
+  Unique product key
+</ParamField>
+
+<ParamField path="data.machineId" type="string" required>
+  Machine identifier
+</ParamField>
+
+<ParamField path="data.signature" type="string" required>
+  HMAC signature
+</ParamField>
+
+<ParamField path="data.careerId" type="string">
+  Optional career identifier
+</ParamField>
+
+**Returns**: `Promise<LicenseActivation>` - Created record as plain object
+
+**Example**:
+```javascript
+const activation = await licenseActivationService.create({
+    productKey: 'PROD-KEY-12345',
+    machineId: 'abc123...',
+    signature: 'def456...',
+    careerId: 'engineering'
+});
+```
+
+---
+
+#### findAll
+
+Retrieves all license activation records.
+
+```javascript
+async findAll() {
+    const activations = await db.LicenseActivation.findAll();
+    return activations.map(a => a.get({ plain: true }));
+}
+```
+
+**Parameters**: None
+
+**Returns**: `Promise<Array<LicenseActivation>>` - Array of all activation records
+
+---
+
+#### findById
+
+Finds a license activation by primary key.
+
+```javascript
+async findById(id) {
+    const activation = await db.LicenseActivation.findByPk(id);
+    return activation ? activation.get({ plain: true }) : null;
+}
+```
+
+<ParamField path="id" type="number" required>
+  Primary key of the activation record
+</ParamField>
+
+**Returns**: `Promise<LicenseActivation | null>` - Found record or `null`
+
+---
+
+#### findByProductKey
+
+Finds a license activation by product key.
+
+```javascript
+async findByProductKey(productKey) {
+    const activation = await db.LicenseActivation.findOne({
+        where: { productKey },
+    });
+    return activation ? activation.get({ plain: true }) : null;
+}
+```
+
+<ParamField path="productKey" type="string" required>
+  Product key to search for
+</ParamField>
+
+**Returns**: `Promise<LicenseActivation | null>` - Found record or `null`
+
+**Example**:
+```javascript
+const license = await licenseActivationService.findByProductKey('PROD-KEY-12345');
+if (license) {
+    console.log('Found license:', license);
+}
+```
+
+---
+
+#### findFirst
+
+Retrieves the first license activation record (typically used when only one activation is expected).
+
+```javascript
+async findFirst() {
+    const activation = await db.LicenseActivation.findOne();
+    return activation ? activation.get({ plain: true }) : null;
+}
+```
+
+**Parameters**: None
+
+**Returns**: `Promise<LicenseActivation | null>` - First record or `null`
+
+**Use Case**: Checking if any license is activated on app startup
+
+---
+
+#### update
+
+Updates an existing license activation record.
+
+```javascript
+async update(id, data) {
+    const activation = await db.LicenseActivation.findByPk(id);
+    if (!activation) return null;
+    const updated = await activation.update(data);
+    return updated.get({ plain: true });
+}
+```
+
+<ParamField path="id" type="number" required>
+  ID of the record to update
+</ParamField>
+
+<ParamField path="data" type="Object" required>
+  Partial data to update (only fields to change)
+</ParamField>
+
+**Returns**: `Promise<LicenseActivation | null>` - Updated record or `null` if not found
+
+**Example**:
+```javascript
+const updated = await licenseActivationService.update(1, {
+    careerId: 'computer-science'
+});
+```
+
+---
+
+#### delete
+
+Deletes a license activation record by ID.
+
+```javascript
+async delete(id) {
+    const activation = await db.LicenseActivation.findByPk(id);
+    if (!activation) return null;
+    const plainActivation = activation.get({ plain: true });
+    await activation.destroy();
+    return plainActivation;
+}
+```
+
+<ParamField path="id" type="number" required>
+  ID of the record to delete
+</ParamField>
+
+**Returns**: `Promise<LicenseActivation | null>` - Deleted record or `null` if not found
+
+<Note type="warning">
+  Returns the deleted record before destruction for logging/audit purposes.
+</Note>
+
+---
+
+#### deleteAll
+
+Deletes all license activation records.
+
+```javascript
+async deleteAll() {
+    await db.LicenseActivation.destroy({ where: {} });
+    return true;
+}
+```
+
+**Parameters**: None
+
+**Returns**: `Promise<boolean>` - Always `true` when successful
+
+<Note type="warning">
+  **Destructive operation**: This permanently deletes all local activation data.
+</Note>
+
+---
+
+## Database Initialization
+
+The database is initialized during app startup:
+
+```javascript
+// In main.js
+app.whenReady().then(async () => {
+    try {
+        await db.sequelize.sync({ force: false });
+        registerIpcHandlers();
+        createWindow();
+    } catch (error) {
+        console.error(error);
+    }
+});
+```
+
+### sync Method
+
+<ParamField path="force" type="boolean" default="false">
+  If `true`, drops existing tables and recreates them. **Use with extreme caution**.
+</ParamField>
+
+<Note>
+  Setting `force: false` ensures existing data is preserved. Tables are created only if they don't exist.
+</Note>
+
+## Data Integrity
+
+### Signature Verification
+
+Every license activation includes an HMAC-SHA256 signature to prevent tampering:
+
+```javascript
+const payload = {
+    productKey: 'PROD-KEY-12345',
+    machineId: 'abc123...'
+};
+
+const signature = generateSignature(payload);
+// signature: 'def456...'
+
+const isValid = verifySignature(payload, signature);
+// isValid: true
+```
+
+### Verification Process
+
+1. **On Activation**: Generate signature from `{ productKey, machineId }`
+2. **On Validation**: Regenerate signature and compare with stored value
+3. **On Mismatch**: Delete the corrupted record and require re-activation
+
+<Note>
+  The `SIGNATURE_SECRET` environment variable is critical for signature generation. It must remain consistent across app versions.
+</Note>
+
+---
+
+## TypeScript Types
+
+For TypeScript projects, define the following types:
+
+```typescript
+interface LicenseActivation {
+    id: number;
+    productKey: string;
+    machineId: string;
+    careerId?: string;
+    activatedAt: Date;
+    signature: string;
+}
+
+interface LicenseActivationCreateData {
+    productKey: string;
+    machineId: string;
+    signature: string;
+    careerId?: string;
+}
+
+interface LicenseActivationUpdateData {
+    careerId?: string;
+    signature?: string;
+}
+```
+
+---
+
+## Migration Considerations
+
+When adding new fields to the schema:
+
+<Tabs>
+  <Tab title="Development">
+    1. Update the model definition in `models/LicenseActivation.js`
+    2. Delete `data.sqlite` to force recreation
+    3. Restart the app
+  </Tab>
+  
+  <Tab title="Production">
+    1. Create a Sequelize migration file
+    2. Run migrations before app startup
+    3. Test thoroughly with existing data
+    
+    ```javascript
+    await sequelize.queryInterface.addColumn('license_activations', 'newField', {
+        type: DataTypes.STRING,
+        allowNull: true
+    });
+    ```
+  </Tab>
+</Tabs>
+
+<Note type="warning">
+  Never use `{ force: true }` in production as it will delete all user data.
+</Note>
+
+---
+
+## Query Examples
+
+Common database queries using the service:
+
+### Check if License Exists
+
+```javascript
+const license = await licenseActivationService.findByProductKey(productKey);
+if (license) {
+    console.log('License already activated');
+} else {
+    console.log('License not found');
+}
+```
+
+### Get Active License on Startup
+
+```javascript
+const activeLicense = await licenseActivationService.findFirst();
+if (activeLicense) {
+    // Verify signature
+    const isValid = verifySignature(
+        { productKey: activeLicense.productKey, machineId: getMachineId() },
+        activeLicense.signature
+    );
+    
+    if (isValid) {
+        // Proceed to main app
+    } else {
+        // Delete and require re-activation
+        await licenseActivationService.delete(activeLicense.id);
+    }
+}
+```
+
+### Reset All Licenses (Admin/Debug)
+
+```javascript
+await licenseActivationService.deleteAll();
+console.log('All licenses cleared');
+```
+
+---
+
+## Performance Considerations
+
+- **SQLite is single-threaded**: Heavy queries may block the main process
+- **Signature verification**: Computationally inexpensive (< 1ms)
+- **Index usage**: `productKey` lookups are optimized with unique index
+- **No connection pooling needed**: SQLite uses a single file connection
+
+<Note>
+  For large-scale applications with many records, consider adding indexes on frequently queried fields like `machineId` or `careerId`.
+</Note>
+
+---
+
+## Next Steps
+
+<Card title="IPC Handlers" icon="arrows-left-right" href="/reference/ipc-handlers">
+  Learn how the database is accessed from the renderer process
+</Card>
+
+<Card title="Electron Main Process" icon="bolt" href="/reference/electron-main">
+  Understand how database initialization fits into app startup
+</Card>

@@ -1,0 +1,667 @@
+---
+title: IPC Handlers
+description: Complete API reference for all Inter-Process Communication handlers in EGEL Simulator
+---
+
+## Overview
+
+IPC (Inter-Process Communication) handlers enable secure communication between the Electron renderer process (React frontend) and the main process (Node.js backend). All handlers are accessed through the `window.api` object exposed by the preload script.
+
+## Response Format
+
+All IPC handlers return a standardized response object:
+
+<Tabs>
+  <Tab title="Success Response">
+    ```typescript
+    {
+      success: true,
+      data: any
+    }
+    ```
+    
+    <ResponseField name="success" type="boolean" required>
+      Always `true` for successful operations
+    </ResponseField>
+    
+    <ResponseField name="data" type="any" required>
+      The requested data or operation result
+    </ResponseField>
+  </Tab>
+  
+  <Tab title="Error Response">
+    ```typescript
+    {
+      success: false,
+      error: {
+        code: string,
+        message: string
+      }
+    }
+    ```
+    
+    <ResponseField name="success" type="boolean" required>
+      Always `false` for failed operations
+    </ResponseField>
+    
+    <ResponseField name="error.code" type="string" required>
+      Machine-readable error code
+    </ResponseField>
+    
+    <ResponseField name="error.message" type="string" required>
+      Human-readable error message
+    </ResponseField>
+  </Tab>
+</Tabs>
+
+### Response Utilities
+
+```javascript
+// Located in: ipc/utils/ipcResponse.js
+
+function successResponse(data) {
+    return { success: true, data };
+}
+
+function errorResponse(code, message) {
+    console.error(`IPC Error [${code}]: ${message}`);
+    return {
+        success: false,
+        error: { code, message },
+    };
+}
+```
+
+## License Activation Handlers
+
+All license activation handlers are registered in `ipc/handlers/licenseActivation.handler.js`.
+
+### Core CRUD Operations
+
+#### findAll
+
+Retrieves all license activations stored locally.
+
+```javascript
+ipcMain.handle('licenseActivation:findAll', () =>
+    licenseActivationService.findAll()
+);
+```
+
+**Channel**: `licenseActivation:findAll`
+
+**Parameters**: None
+
+<ResponseField name="data" type="Array<LicenseActivation>">
+  Array of all license activation records
+</ResponseField>
+
+**Example Usage**:
+```typescript
+const result = await window.api.licenseActivation.findAll();
+if (result.success) {
+    console.log(result.data); // Array of licenses
+}
+```
+
+---
+
+#### findById
+
+Searches for a license activation by its ID.
+
+```javascript
+ipcMain.handle('licenseActivation:findById', (_event, id) =>
+    licenseActivationService.findById(id)
+);
+```
+
+**Channel**: `licenseActivation:findById`
+
+<ParamField path="id" type="number" required>
+  The primary key of the license activation record
+</ParamField>
+
+<ResponseField name="data" type="LicenseActivation | null">
+  License activation object or `null` if not found
+</ResponseField>
+
+---
+
+#### findByProductKey
+
+Searches for a license activation by product key.
+
+```javascript
+ipcMain.handle('licenseActivation:findByProductKey', (_event, productKey) =>
+    licenseActivationService.findByProductKey(productKey)
+);
+```
+
+**Channel**: `licenseActivation:findByProductKey`
+
+<ParamField path="productKey" type="string" required>
+  The product key to search for (unique constraint)
+</ParamField>
+
+<ResponseField name="data" type="LicenseActivation | null">
+  License activation object or `null` if not found
+</ResponseField>
+
+**Example Usage**:
+```typescript
+const result = await window.api.licenseActivation.findByProductKey('XXXX-YYYY-ZZZZ');
+if (result.success && result.data) {
+    console.log('License found:', result.data);
+}
+```
+
+---
+
+#### findFirst
+
+Retrieves the first license activation record.
+
+```javascript
+ipcMain.handle('licenseActivation:findFirst', () =>
+    licenseActivationService.findFirst()
+);
+```
+
+**Channel**: `licenseActivation:findFirst`
+
+**Parameters**: None
+
+<ResponseField name="data" type="LicenseActivation | null">
+  First license activation or `null` if none exist
+</ResponseField>
+
+---
+
+#### create
+
+Creates a new license activation record.
+
+```javascript
+ipcMain.handle('licenseActivation:create', (_event, data) =>
+    licenseActivationService.create(data)
+);
+```
+
+**Channel**: `licenseActivation:create`
+
+<ParamField path="data" type="Object" required>
+  License activation data object
+</ParamField>
+
+<ParamField path="data.productKey" type="string" required>
+  Unique product key for the license
+</ParamField>
+
+<ParamField path="data.machineId" type="string" required>
+  Machine ID obtained from `node-machine-id`
+</ParamField>
+
+<ParamField path="data.signature" type="string" required>
+  HMAC-SHA256 signature for validation
+</ParamField>
+
+<ParamField path="data.careerId" type="string">
+  Optional career/course identifier
+</ParamField>
+
+<ResponseField name="data" type="LicenseActivation">
+  The newly created license activation record
+</ResponseField>
+
+---
+
+#### update
+
+Updates an existing license activation record.
+
+```javascript
+ipcMain.handle('licenseActivation:update', (_event, id, data) =>
+    licenseActivationService.update(id, data)
+);
+```
+
+**Channel**: `licenseActivation:update`
+
+<ParamField path="id" type="number" required>
+  ID of the record to update
+</ParamField>
+
+<ParamField path="data" type="Object" required>
+  Partial update data (only fields to change)
+</ParamField>
+
+<ResponseField name="data" type="LicenseActivation | null">
+  Updated record or `null` if not found
+</ResponseField>
+
+---
+
+#### delete
+
+Deletes a license activation by ID.
+
+```javascript
+ipcMain.handle('licenseActivation:delete', (_event, id) =>
+    licenseActivationService.delete(id)
+);
+```
+
+**Channel**: `licenseActivation:delete`
+
+<ParamField path="id" type="number" required>
+  ID of the record to delete
+</ParamField>
+
+<ResponseField name="data" type="LicenseActivation | null">
+  Deleted record or `null` if not found
+</ResponseField>
+
+---
+
+#### deleteAll
+
+Deletes all license activation records.
+
+```javascript
+ipcMain.handle('licenseActivation:deleteAll', () =>
+    licenseActivationService.deleteAll()
+);
+```
+
+**Channel**: `licenseActivation:deleteAll`
+
+**Parameters**: None
+
+<ResponseField name="data" type="boolean">
+  Always returns `true` when successful
+</ResponseField>
+
+<Note type="warning">
+  **Use with caution**: This operation cannot be undone and removes all local license data.
+</Note>
+
+---
+
+### Advanced Handlers
+
+#### verifyAndActivateKey
+
+Verifies a product key against the remote Supabase database and activates it locally.
+
+```javascript
+ipcMain.handle('licenseActivation:verifyAndActivateKey', async (_event, productKey) => {
+    const machineId = machineIdSync();
+
+    try {
+        // 1. Fetch license from Supabase
+        const license = await licenseRemoteService.fetchLicenseByKey(productKey);
+        if (!license) {
+            return errorResponse('LICENSE_NOT_FOUND', 'Licencia no encontrada en el servidor remoto.');
+        }
+
+        // 2. Validate license status
+        if (license.status !== 'active') {
+            return errorResponse('LICENSE_INACTIVE', 'Licencia inactiva o revocada. Contacte al soporte.');
+        }
+
+        // 3. Check machine binding
+        if (license.machineId && license.machineId !== machineId) {
+            return errorResponse('LICENSE_ALREADY_BOUND', 'Esta clave ya está activada en otro dispositivo.');
+        }
+
+        // 4. Bind license to this machine
+        const bindSuccess = await licenseRemoteService.bindLicenseToMachine(productKey, machineId);
+        if (!bindSuccess) {
+            return errorResponse('BIND_FAILED', 'Error al asociar la licencia en el servidor remoto.');
+        }
+
+        // 5. Check if already activated locally
+        const existingLocal = await licenseActivationService.findByProductKey(productKey);
+        if (existingLocal) {
+            return successResponse(existingLocal);
+        }
+
+        // 6. Create local activation record
+        const payload = { productKey, machineId };
+        const signature = generateSignature(payload);
+
+        const localActivation = await licenseActivationService.create({
+            ...payload,
+            signature,
+        });
+
+        return successResponse(localActivation);
+
+    } catch (err) {
+        return errorResponse('UNEXPECTED_ERROR', err.message || 'Ocurrió un error inesperado.');
+    }
+});
+```
+
+**Channel**: `licenseActivation:verifyAndActivateKey`
+
+<ParamField path="productKey" type="string" required>
+  Product key to verify and activate
+</ParamField>
+
+**Activation Flow**:
+
+1. Fetches license from Supabase remote database
+2. Validates license status is `active`
+3. Checks if license is already bound to another machine
+4. Binds license to current machine ID
+5. Creates local activation record with signature
+6. Returns activation data
+
+<ResponseField name="data" type="LicenseActivation">
+  Local activation record with signature
+</ResponseField>
+
+**Error Codes**:
+
+<Expandable title="LICENSE_NOT_FOUND">
+  The product key does not exist in the remote database.
+</Expandable>
+
+<Expandable title="LICENSE_INACTIVE">
+  The license status is not `active` (may be revoked or expired).
+</Expandable>
+
+<Expandable title="LICENSE_ALREADY_BOUND">
+  The license is already activated on a different machine.
+</Expandable>
+
+<Expandable title="BIND_FAILED">
+  Failed to update the remote database with machine binding.
+</Expandable>
+
+<Expandable title="UNEXPECTED_ERROR">
+  An unexpected error occurred during the activation process.
+</Expandable>
+
+**Example Usage**:
+```typescript
+const result = await window.api.licenseActivation.verifyAndActivateKey('PROD-KEY-12345');
+
+if (result.success) {
+    console.log('License activated:', result.data);
+    // Proceed with application
+} else {
+    switch (result.error.code) {
+        case 'LICENSE_NOT_FOUND':
+            alert('Invalid product key');
+            break;
+        case 'LICENSE_ALREADY_BOUND':
+            alert('This key is already used on another device');
+            break;
+        default:
+            alert(result.error.message);
+    }
+}
+```
+
+---
+
+#### verifyLocalActivation
+
+Verifies the integrity of the locally stored license activation using cryptographic signature validation.
+
+```javascript
+ipcMain.handle('licenseActivation:verifyLocalActivation', async () => {
+    const machineId = machineIdSync();
+
+    try {
+        // 1. Get first local license
+        const license = await licenseActivationService.findFirst();
+
+        if (!license) {
+            return errorResponse('NO_LOCAL_LICENSE', 'No se encontró una licencia local para validar.');
+        }
+
+        // 2. Reconstruct signature payload
+        const payload = {
+            productKey: license.productKey,
+            machineId
+        };
+
+        // 3. Verify signature
+        const isValid = verifySignature(payload, license.signature);
+
+        if (!isValid) {
+            // Delete corrupted license
+            await licenseActivationService.delete(license.id);
+            return errorResponse('INVALID_SIGNATURE', 'La firma de la licencia no es válida. Se ha eliminado el registro local.');
+        }
+
+        return successResponse(license);
+    } catch (err) {
+        return errorResponse('VALIDATION_ERROR', err.message || 'Error durante la validación de la licencia.');
+    }
+});
+```
+
+**Channel**: `licenseActivation:verifyLocalActivation`
+
+**Parameters**: None
+
+**Validation Flow**:
+
+1. Retrieves the first local license activation
+2. Reconstructs the signature payload
+3. Verifies HMAC-SHA256 signature matches
+4. Deletes the record if signature is invalid (tamper protection)
+5. Returns validated license
+
+<ResponseField name="data" type="LicenseActivation">
+  Validated license activation record
+</ResponseField>
+
+**Error Codes**:
+
+<Expandable title="NO_LOCAL_LICENSE">
+  No license activation found in local database.
+</Expandable>
+
+<Expandable title="INVALID_SIGNATURE">
+  The signature verification failed, indicating the license was tampered with. The local record is automatically deleted.
+</Expandable>
+
+<Expandable title="VALIDATION_ERROR">
+  An unexpected error occurred during validation.
+</Expandable>
+
+<Note>
+  This handler automatically deletes invalid licenses to prevent usage of tampered activation data.
+</Note>
+
+**Example Usage**:
+```typescript
+// Check on app startup
+const result = await window.api.licenseActivation.verifyLocalActivation();
+
+if (result.success) {
+    console.log('License is valid:', result.data);
+    // Continue to main app
+} else {
+    console.error('License validation failed:', result.error.message);
+    // Redirect to activation page
+}
+```
+
+---
+
+## Signature Utilities
+
+The signature system ensures license data integrity using HMAC-SHA256.
+
+### generateSignature
+
+```javascript
+const crypto = require('crypto');
+const SECRET = process.env.SIGNATURE_SECRET;
+
+function generateSignature(payload) {
+    const normalized = normalizePayload(payload);
+    const hmac = crypto.createHmac('sha256', SECRET);
+    hmac.update(JSON.stringify(normalized));
+    return hmac.digest('hex');
+}
+```
+
+<ParamField path="payload" type="Object" required>
+  Data to sign (typically `{ productKey, machineId }`)
+</ParamField>
+
+**Returns**: `string` - Hexadecimal HMAC-SHA256 signature
+
+### verifySignature
+
+```javascript
+function verifySignature(payload, signature) {
+    const expected = generateSignature(payload);
+    return signature === expected;
+}
+```
+
+<ParamField path="payload" type="Object" required>
+  Original data that was signed
+</ParamField>
+
+<ParamField path="signature" type="string" required>
+  Signature to verify
+</ParamField>
+
+**Returns**: `boolean` - `true` if signature is valid
+
+### normalizePayload
+
+```javascript
+function normalizePayload(obj) {
+    if (Array.isArray(obj)) {
+        return obj.map(normalizePayload);
+    } else if (obj && typeof obj === 'object' && obj !== null) {
+        return Object.keys(obj).sort().reduce((acc, key) => {
+            acc[key] = normalizePayload(obj[key]);
+            return acc;
+        }, {});
+    }
+    return obj;
+}
+```
+
+Recursively sorts object keys alphabetically to ensure consistent signature generation.
+
+<Note>
+  The `SIGNATURE_SECRET` environment variable must be set for signature generation and verification to work.
+</Note>
+
+---
+
+## Remote License Service
+
+Handlers interact with Supabase for remote license validation.
+
+### fetchLicenseByKey
+
+```javascript
+class LicenseRemoteService {
+    async fetchLicenseByKey(productKey) {
+        const { data, error } = await supabase
+            .from('licenses')
+            .select('*')
+            .eq('product_key', productKey)
+            .single();
+
+        if (error || !data) return null;
+        return data;
+    }
+}
+```
+
+<ParamField path="productKey" type="string" required>
+  Product key to search in Supabase
+</ParamField>
+
+**Returns**: `Promise<Object | null>` - License data or `null`
+
+### bindLicenseToMachine
+
+```javascript
+class LicenseRemoteService {
+    async bindLicenseToMachine(productKey, machineId) {
+        const { error } = await supabase
+            .from('licenses')
+            .update({ machineId, activated_at: new Date().toISOString() })
+            .eq('product_key', productKey);
+        return !error;
+    }
+}
+```
+
+<ParamField path="productKey" type="string" required>
+  Product key to bind
+</ParamField>
+
+<ParamField path="machineId" type="string" required>
+  Machine ID from `node-machine-id`
+</ParamField>
+
+**Returns**: `Promise<boolean>` - `true` if successful
+
+---
+
+## Handler Registration
+
+All handlers are registered in `ipc/index.js`:
+
+```javascript
+const { registerLicenseActivationHandlers } = require('./handlers/licenseActivation.handler.js');
+
+const registerIpcHandlers = () => {
+    registerLicenseActivationHandlers();
+};
+
+module.exports = { registerIpcHandlers };
+```
+
+Called during app initialization in `main.js`:
+
+```javascript
+app.whenReady().then(async () => {
+    await db.sequelize.sync({ force: false });
+    registerIpcHandlers(); // Registers all IPC handlers
+    createWindow();
+});
+```
+
+---
+
+## Security Considerations
+
+<Note type="warning">
+  **Important Security Practices**:
+  
+  - All IPC handlers run in the main process with full Node.js access
+  - Never expose raw database queries to the renderer
+  - Always validate input parameters before database operations
+  - Use signature verification to prevent license tampering
+  - Never log sensitive data (product keys, signatures) in production
+</Note>
+
+---
+
+## Next Steps
+
+<Card title="Database Schema" icon="database" href="/reference/database-schema">
+  Learn about the LicenseActivation model structure
+</Card>
+
+<Card title="Electron Main Process" icon="bolt" href="/reference/electron-main">
+  Understand the main process architecture
+</Card>

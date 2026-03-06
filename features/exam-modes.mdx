@@ -1,0 +1,300 @@
+---
+title: 'Exam Modes'
+description: 'Understanding Practice Mode and Simulation Mode in EGEL Simulator'
+icon: 'graduation-cap'
+---
+
+## Overview
+
+EGEL Simulator offers two distinct exam modes designed to match different learning objectives: **Practice Mode** and **Simulation Mode**. Each mode provides a unique experience tailored to help you prepare effectively for the EGEL exam.
+
+<CardGroup cols={2}>
+  <Card title="Practice Mode" icon="book-open">
+    Get immediate feedback after each answer to learn as you go
+  </Card>
+  <Card title="Simulation Mode" icon="clock">
+    Experience realistic exam conditions with no immediate feedback
+  </Card>
+</CardGroup>
+
+## Mode Comparison
+
+The exam mode is controlled by the `practiceMode` boolean flag in the configuration system:
+
+```typescript
+type SimulationSettings = {
+  area: SimulationType;
+  timerEnabled: boolean;
+  duration: number;
+  practiceMode: boolean;  // Controls the exam mode
+};
+```
+
+### Practice Mode
+
+Practice Mode is designed for **active learning and skill development**. When enabled, it provides immediate feedback after each question, allowing you to learn from mistakes in real-time.
+
+#### How It Works
+
+In the TestPage component (`TestPage.tsx:143`), the mode determines the feedback behavior:
+
+```tsx
+<Question
+  question={currentQuestion}
+  selectedAnswer={selectedAnswer}
+  onSelect={(index) => selectAnswer(currentQuestion.id, index)}
+  showFeedback={showFeedback}
+  mode={config.practiceMode ? "practica" : "simulacro"}
+  allowMultipleSelection={!config.practiceMode}
+/>
+```
+
+#### Key Characteristics
+
+<Tabs>
+  <Tab title="Feedback">
+    - **Immediate visual feedback** after selecting an answer
+    - Shows whether your answer was correct or incorrect
+    - Only one answer attempt per question (`selectedAnswers[id] === undefined` check in `TestPage.tsx:42`)
+    - Feedback is displayed before moving to the next question
+  </Tab>
+  <Tab title="Learning Focus">
+    - Reinforces correct answers immediately
+    - Helps identify knowledge gaps in real-time
+    - Reduces anxiety by confirming understanding
+    - Ideal for first-time learners or topic review
+  </Tab>
+  <Tab title="UI Indicators">
+    The mode is clearly displayed in the header:
+    ```tsx
+    <span className="px-4 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold shadow-inner">
+      {config.practiceMode ? "Modo Práctica" : "Simulacro"}
+    </span>
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+In Practice Mode, the `showFeedback` state is set to `true` immediately after answer selection (`TestPage.tsx:44`), triggering visual feedback in the Question component.
+</Note>
+
+### Simulation Mode
+
+Simulation Mode replicates **authentic exam conditions** to help you prepare for the actual test experience. Feedback is withheld until the exam is complete.
+
+#### How It Works
+
+When `practiceMode` is `false` (default), the simulator:
+
+1. **Allows answer changes**: The `allowMultipleSelection` prop is `true` when not in practice mode
+2. **Defers feedback**: No immediate indication of correctness
+3. **Shows results at the end**: After the last question, results are calculated and saved to history
+
+```typescript
+const selectAnswer = (id: string, index: number) => {
+  if (selectedAnswers[id] === undefined) {
+    setSelectedAnswers((prev) => ({ ...prev, [id]: index }))
+    setShowFeedback(true)
+  }
+}
+```
+
+#### Key Characteristics
+
+<Tabs>
+  <Tab title="Authentic Experience">
+    - No immediate feedback during the exam
+    - Simulates real test pressure and timing
+    - Trains exam-taking strategies
+    - Builds confidence for actual exam day
+  </Tab>
+  <Tab title="Results">
+    Results are calculated when the exam completes (`TestPage.tsx:52-71`):
+    ```typescript
+    const isLast = currentQuestionIndex === examQuestions.length - 1
+    
+    if (isLast) {
+      const total = examQuestions.length
+      const correct = Math.floor(total * 0.7) // Score calculation
+      const score = Math.round((correct / total) * 100)
+      
+      addHistoryEntry({
+        date,
+        time,
+        score,
+        correct,
+        total,
+        type: config!.area,
+        timerEnabled: config!.timerEnabled,
+        practiceMode: config!.practiceMode,
+      });
+      
+      navigate("/history");
+    }
+    ```
+  </Tab>
+  <Tab title="UI Indicators">
+    The mode badge shows "Simulacro" when practice mode is disabled:
+    ```tsx
+    {config.practiceMode ? "Modo Práctica" : "Simulacro"}
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+After completing a simulation, you're automatically redirected to the History page to review your performance.
+</Info>
+
+## Configuration
+
+Exam mode is configured on the Setup Page before starting an exam.
+
+### Setting Up Practice Mode
+
+In `SetupPage.tsx:66-82`, users can toggle Practice Mode with a checkbox:
+
+```tsx
+const [practiceMode, setPracticeMode] = useState(false);
+
+// UI Component
+<label className="flex items-center space-x-2 mb-1">
+  <input
+    id="practice-mode"
+    type="checkbox"
+    checked={practiceMode}
+    onChange={() => setPracticeMode(!practiceMode)}
+    className="form-checkbox w-5 h-5 text-green-600 border-gray-300 rounded accent-green-600"
+  />
+  <span className="text-base text-gray-700">Modo práctica</span>
+</label>
+<p className="text-xs text-gray-500 max-w-[200px] pl-7">
+  Recibirás retroalimentación inmediata después de cada respuesta.
+</p>
+```
+
+### Saving Configuration
+
+When starting the exam, the configuration is saved to the setup store (`SetupPage.tsx:15-25`):
+
+```typescript
+const handleClick = () => {
+  const simulationSettings = {
+    area: selectedArea,
+    timerEnabled: timerEnabled,
+    duration: 40000,  // 40,000 seconds
+    practiceMode: practiceMode,
+  };
+  setConfig(simulationSettings);
+  
+  navigate("/test");
+};
+```
+
+<Tip>
+The practice mode setting is preserved throughout the exam session and recorded in the history for later reference.
+</Tip>
+
+## When to Use Each Mode
+
+### Use Practice Mode When:
+
+<CardGroup cols={2}>
+  <Card icon="lightbulb">
+    **Learning new topics**
+    
+    Immediate feedback helps reinforce concepts as you study
+  </Card>
+  <Card icon="refresh">
+    **Reviewing weak areas**
+    
+    Quickly identify and correct misunderstandings
+  </Card>
+  <Card icon="chart-line">
+    **Building confidence**
+    
+    Positive reinforcement from correct answers
+  </Card>
+  <Card icon="book">
+    **First-time preparation**
+    
+    Gentle introduction to exam format and content
+  </Card>
+</CardGroup>
+
+### Use Simulation Mode When:
+
+<CardGroup cols={2}>
+  <Card icon="graduation-cap">
+    **Final preparation**
+    
+    Test your readiness under realistic conditions
+  </Card>
+  <Card icon="stopwatch">
+    **Time management practice**
+    
+    Experience actual exam time pressure
+  </Card>
+  <Card icon="target">
+    **Performance benchmarking**
+    
+    Get accurate scores to gauge exam readiness
+  </Card>
+  <Card icon="brain">
+    **Strategy testing**
+    
+    Practice question selection and pacing strategies
+  </Card>
+</CardGroup>
+
+## Mode Impact on History
+
+Both modes are tracked in the exam history (`useHistoryStore.tsx:4-14`):
+
+```typescript
+export interface HistoryItem {
+  id: string;
+  date: string;
+  time: string;
+  score: number;
+  correct: number;
+  total: number;
+  type: SimulationType;
+  timerEnabled?: boolean;
+  practiceMode?: boolean;  // Records which mode was used
+}
+```
+
+On the History Page (`HistoryPage.tsx:75-78`), you can see which mode was used for each attempt:
+
+```tsx
+<span className="flex items-center gap-1 bg-green-50 px-2 py-1 rounded-full">
+  <PlayCircle className="w-4 h-4" />
+  {item.practiceMode ? "Práctica" : "Simulacro"}
+</span>
+```
+
+This allows you to compare performance between practice sessions and full simulations.
+
+## Best Practices
+
+<Accordion title="Recommended Study Progression">
+  1. **Start with Practice Mode** to learn the content and question formats
+  2. **Mix both modes** as you become comfortable with the material
+  3. **Use Simulation Mode** exclusively in the final week before your exam
+  4. **Review History** to track improvement across both modes
+</Accordion>
+
+<Accordion title="Combining with Timer">
+  - Practice Mode + Timer ON: Build speed while learning
+  - Practice Mode + Timer OFF: Focus purely on content mastery
+  - Simulation Mode + Timer ON: Full exam simulation (recommended)
+  - Simulation Mode + Timer OFF: Assess knowledge without time pressure
+</Accordion>
+
+<Accordion title="Tracking Your Progress">
+  Use the History page to:
+  - Compare practice mode scores to simulation mode scores
+  - Identify if you perform differently under exam conditions
+  - Determine when you're ready to transition from practice to simulation
+  - Build confidence by seeing improvement over time
+</Accordion>

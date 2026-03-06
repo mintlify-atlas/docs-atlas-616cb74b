@@ -1,0 +1,675 @@
+---
+title: 'History Tracking'
+description: 'Understanding exam history storage, data structure, and performance analysis in EGEL Simulator'
+icon: 'clock-rotate-left'
+---
+
+## Overview
+
+EGEL Simulator automatically **tracks and persists** the results of every exam you complete. This history allows you to monitor progress, identify patterns, and measure improvement over time.
+
+<CardGroup cols={2}>
+  <Card title="Automatic Tracking" icon="floppy-disk">
+    Every completed exam is saved automatically
+  </Card>
+  <Card title="Persistent Storage" icon="database">
+    History survives app restarts via localStorage
+  </Card>
+</CardGroup>
+
+## History Data Structure
+
+Each exam result is stored as a `HistoryItem` object (`useHistoryStore.tsx:4-14`):
+
+```typescript
+export interface HistoryItem {
+  id: string;                  // Unique identifier for the entry
+  date: string;                // Date the exam was completed
+  time: string;                // Time the exam was completed
+  score: number;               // Percentage score (0-100)
+  correct: number;             // Number of correct answers
+  total: number;               // Total number of questions
+  type: SimulationType;        // "disciplinar" | "transversal" | "ambas"
+  timerEnabled?: boolean;      // Whether timer was used
+  practiceMode?: boolean;      // Whether practice mode was used
+}
+```
+
+### Field Details
+
+<Tabs>
+  <Tab title="id">
+    **Unique Identifier**
+    
+    Generated using `crypto.randomUUID()` when the entry is created:
+    
+    ```typescript
+    const newEntry: HistoryItem = {
+      id: crypto.randomUUID(),
+      ...entry,
+    };
+    ```
+    
+    Format: Standard UUID (e.g., `"f47ac10b-58cc-4372-a567-0e02b2c3d479"`)
+  </Tab>
+  <Tab title="date & time">
+    **Timestamp Information**
+    
+    Generated when the exam is completed (`TestPage.tsx:58-60`):
+    
+    ```typescript
+    const now = new Date();
+    const date = now.toLocaleDateString()  // e.g., "3/6/2026"
+    const time = now.toLocaleTimeString()  // e.g., "2:30:45 PM"
+    ```
+    
+    Format depends on browser locale settings.
+  </Tab>
+  <Tab title="score, correct, total">
+    **Performance Metrics**
+    
+    Calculated at exam completion (`TestPage.tsx:53-57`):
+    
+    ```typescript
+    const total = examQuestions.length
+    const correct = Math.floor(total * 0.7)  // Example: 70% correct
+    const score = Math.round((correct / total) * 100)
+    ```
+    
+    <Warning>
+    The current implementation uses a simulated 70% score. In production, this should calculate actual correct answers.
+    </Warning>
+  </Tab>
+  <Tab title="type">
+    **Simulation Type**
+    
+    Records which question set was used:
+    
+    ```typescript
+    type: config!.area  // "disciplinar" | "transversal" | "ambas"
+    ```
+    
+    This allows filtering history by question type.
+  </Tab>
+  <Tab title="timerEnabled & practiceMode">
+    **Configuration Flags**
+    
+    Records the exam configuration:
+    
+    ```typescript
+    timerEnabled: config!.timerEnabled,   // true/false
+    practiceMode: config!.practiceMode,   // true/false
+    ```
+    
+    These fields are optional (can be `undefined`) but are always set in the current implementation.
+  </Tab>
+</Tabs>
+
+## History Store Implementation
+
+History is managed using Zustand with persistence middleware (`useHistoryStore.tsx:16-39`):
+
+```typescript
+interface HistoryState {
+  history: HistoryItem[];                      // Array of all history items
+  addEntry: (entry: Omit<HistoryItem, 'id'>) => void;  // Add new entry
+  clearHistory: () => void;                    // Clear all history
+}
+
+export const useHistoryStore = create<HistoryState>()()
+  persist(
+    (set, get) => ({
+      history: [],
+      addEntry: (entry) => {
+        const newEntry: HistoryItem = {
+          id: crypto.randomUUID(),
+          ...entry,
+        };
+        set({ history: [newEntry, ...get().history] });
+      },
+      clearHistory: () => set({ history: [] }),
+    }),
+    {
+      name: 'sim-history-store',  // localStorage key
+    }
+  )
+);
+```
+
+### Key Features
+
+<Tabs>
+  <Tab title="Zustand Store">
+    Zustand provides:
+    - Simple state management
+    - No boilerplate
+    - Type safety
+    - Easy access from any component
+    
+    Usage:
+    ```typescript
+    const history = useHistoryStore((state) => state.history);
+    const addEntry = useHistoryStore((state) => state.addEntry);
+    ```
+  </Tab>
+  <Tab title="Persistence Middleware">
+    The `persist` middleware:
+    - Saves state to `localStorage`
+    - Restores state on app reload
+    - Uses key `'sim-history-store'`
+    - Automatic serialization/deserialization
+    
+    In browser DevTools:
+    ```javascript
+    localStorage.getItem('sim-history-store')
+    // Returns: {"state":{"history":[...]},"version":0}
+    ```
+  </Tab>
+  <Tab title="Prepend Strategy">
+    New entries are added to the **beginning** of the array:
+    
+    ```typescript
+    set({ history: [newEntry, ...get().history] });
+    //              ^^^^^^^^ New entry first
+    ```
+    
+    This ensures the most recent exams appear first without needing to sort.
+  </Tab>
+</Tabs>
+
+<Info>
+History persists across app restarts, allowing you to track long-term progress.
+</Info>
+
+## Recording History
+
+History entries are created when an exam is completed (`TestPage.tsx:52-73`):
+
+```typescript
+const nextQuestion = () => {
+  setShowFeedback(false);
+  const isLast = currentQuestionIndex === examQuestions.length - 1
+
+  if (isLast) {
+    const total = examQuestions.length
+    const correct = Math.floor(total * 0.7)  // Simulated score
+    const score = Math.round((correct / total) * 100)
+    const now = new Date();
+    const date = now.toLocaleDateString()
+    const time = now.toLocaleTimeString()
+
+    addHistoryEntry({
+      date,
+      time,
+      score,
+      correct,
+      total,
+      type: config!.area,
+      timerEnabled: config!.timerEnabled,
+      practiceMode: config!.practiceMode,
+    });
+
+    navigate("/history");
+  } else {
+    setCurrentQuestionIndex((prev) => prev + 1);
+  }
+}
+```
+
+### Recording Flow
+
+1. **Detect completion**: Check if on last question (`isLast`)
+2. **Calculate results**: Determine `correct`, `score`, `total`
+3. **Generate timestamp**: Create `date` and `time` strings
+4. **Create entry**: Call `addHistoryEntry()` with all data
+5. **Navigate**: Redirect to History page to show results
+
+<Note>
+History is only recorded when the exam is completed normally by clicking through all questions. Exiting early does not create a history entry.
+</Note>
+
+## History Page
+
+The History Page displays all recorded exams and provides summary statistics (`HistoryPage.tsx`).
+
+### Summary Statistics
+
+At the top, the page shows aggregate totals (`HistoryPage.tsx:9-23`):
+
+```typescript
+const totals = history.reduce(
+  (acc, cur) => {
+    if (cur.type in acc) {
+      acc[cur.type as SimulationType]++;
+    }
+    acc.total++;
+    return acc;
+  },
+  {
+    disciplinar: 0,
+    transversal: 0,
+    ambas: 0,
+    total: 0,
+  } as Record<SimulationType | "total", number>
+);
+```
+
+These totals are displayed as cards (`HistoryPage.tsx:40-57`):
+
+```tsx
+<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center mt-4">
+  <div className="bg-blue-50 rounded-xl p-5 shadow">
+    <p className="font-bold text-gray-500">Total</p>
+    <p className="text-lg font-bold text-blue-700">{totals.total}</p>
+  </div>
+  <div className="bg-pink-50 rounded-xl p-5 shadow">
+    <p className="font-bold text-gray-500">Disciplinar</p>
+    <p className="text-lg font-bold text-pink-700">{totals.disciplinar}</p>
+  </div>
+  <div className="bg-yellow-50 rounded-xl p-5 shadow">
+    <p className="font-bold text-gray-500">Transversal</p>
+    <p className="text-lg font-bold text-yellow-600">{totals.transversal}</p>
+  </div>
+  <div className="bg-purple-50 rounded-xl p-5 shadow">
+    <p className="font-bold text-gray-500">Ambas Areas</p>
+    <p className="text-lg font-bold text-purple-700">{totals.ambas}</p>
+  </div>
+</div>
+```
+
+<CardGroup cols={4}>
+  <Card title="Total" icon="list">
+    Total number of completed exams
+  </Card>
+  <Card title="Disciplinar" icon="flask">
+    Exams with only disciplinary questions
+  </Card>
+  <Card title="Transversal" icon="arrows-cross">
+    Exams with only transversal questions
+  </Card>
+  <Card title="Ambas" icon="layer-group">
+    Exams with both question types
+  </Card>
+</CardGroup>
+
+### Individual History Entries
+
+Each exam is displayed as a card with full details (`HistoryPage.tsx:60-92`):
+
+```tsx
+{history.map((item) => (
+  <div key={item.id} className="flex flex-col sm:flex-row justify-between items-center p-4 bg-white border border-green-100 rounded-xl shadow hover:shadow-md transition">
+    <div className="flex items-center space-x-4 text-left w-full sm:w-auto">
+      <CheckCircle className="text-green-600 w-6 h-6" />
+      <div>
+        {/* Type, Date, Time */}
+        <p className="text-base font-medium text-gray-800 tracking-wide mb-1">
+          <span className="font-bold italic">
+            {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
+          </span>
+          &nbsp;&nbsp;~&nbsp;&nbsp; {item.date} &nbsp;&nbsp;&nbsp;&nbsp; {item.time}
+        </p>
+
+        {/* Configuration Badges */}
+        <div className="flex flex-wrap text-sm text-gray-600 gap-2">
+          <span className="flex items-center gap-1 bg-green-50 px-2 py-1 rounded-full">
+            <PlayCircle className="w-4 h-4" />
+            {item.practiceMode ? "Práctica" : "Simulacro"}
+          </span>
+          <span className="flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-full">
+            <Timer className="w-4 h-4" />
+            {item.timerEnabled ? "Cronometrado" : "Sin cronómetro"}
+          </span>
+        </div>
+        
+        {/* Results */}
+        <p className="text-sm text-green-700 mt-1">
+          {item.correct} aciertos de {item.total}
+        </p>
+      </div>
+    </div>
+    
+    {/* Score */}
+    <div className="mt-4 sm:mt-0 text-right">
+      <p className="text-xl font-bold text-blue-800">{item.score}%</p>
+      <p className="text-xs text-gray-400">Calificación</p>
+    </div>
+  </div>
+))}
+```
+
+### Empty State
+
+When no exams have been completed (`HistoryPage.tsx:94-96`):
+
+```tsx
+{history.length === 0 && (
+  <p className="text-center text-gray-400 mt-6 italic">
+    Aún no has realizado simulacros.
+  </p>
+)}
+```
+
+## Using History Data
+
+### Accessing History
+
+From any component:
+
+```typescript
+import { useHistoryStore } from '../features/EGEL/hooks/useHistoryStore';
+
+function MyComponent() {
+  const history = useHistoryStore((state) => state.history);
+  
+  // Access all history items
+  console.log(history);
+}
+```
+
+### Adding Entries
+
+```typescript
+const addEntry = useHistoryStore((state) => state.addEntry);
+
+addEntry({
+  date: '3/6/2026',
+  time: '2:30:45 PM',
+  score: 85,
+  correct: 17,
+  total: 20,
+  type: 'ambas',
+  timerEnabled: true,
+  practiceMode: false,
+});
+// ID is automatically generated
+```
+
+### Clearing History
+
+```typescript
+const clearHistory = useHistoryStore((state) => state.clearHistory);
+
+clearHistory();
+// Removes all history items
+```
+
+<Warning>
+There's currently no UI button to clear history. Users would need to manually delete localStorage data or you would need to add this feature.
+</Warning>
+
+## Analyzing Performance
+
+### Filtering by Type
+
+```typescript
+const history = useHistoryStore((state) => state.history);
+
+// Get only disciplinary exams
+const disciplinaryExams = history.filter(item => item.type === 'disciplinar');
+
+// Get only timed exams
+const timedExams = history.filter(item => item.timerEnabled);
+
+// Get only simulation mode exams
+const simulations = history.filter(item => !item.practiceMode);
+```
+
+### Calculating Averages
+
+```typescript
+const history = useHistoryStore((state) => state.history);
+
+// Average score across all exams
+const avgScore = history.reduce((sum, item) => sum + item.score, 0) / history.length;
+
+// Average for simulations only
+const simulations = history.filter(item => !item.practiceMode);
+const avgSimScore = simulations.reduce((sum, item) => sum + item.score, 0) / simulations.length;
+
+// Success rate (exams > 70%)
+const passCount = history.filter(item => item.score >= 70).length;
+const passRate = (passCount / history.length) * 100;
+```
+
+### Tracking Progress Over Time
+
+```typescript
+// Get recent exams
+const recentExams = history.slice(0, 10);
+
+// Compare first 5 vs last 5
+const firstFive = history.slice(-5);
+const lastFive = history.slice(0, 5);
+
+const avgFirst = firstFive.reduce((sum, item) => sum + item.score, 0) / 5;
+const avgLast = lastFive.reduce((sum, item) => sum + item.score, 0) / 5;
+const improvement = avgLast - avgFirst;
+
+console.log(`Improvement: ${improvement}%`);
+```
+
+<Tip>
+Since entries are stored with newest first, `history[0]` is always your most recent exam.
+</Tip>
+
+## Data Persistence
+
+### localStorage Structure
+
+History is stored in `localStorage` under the key `'sim-history-store'`:
+
+```json
+{
+  "state": {
+    "history": [
+      {
+        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "date": "3/6/2026",
+        "time": "2:30:45 PM",
+        "score": 85,
+        "correct": 17,
+        "total": 20,
+        "type": "ambas",
+        "timerEnabled": true,
+        "practiceMode": false
+      }
+    ]
+  },
+  "version": 0
+}
+```
+
+### Inspecting Storage
+
+In browser DevTools Console:
+
+```javascript
+// View raw storage
+localStorage.getItem('sim-history-store')
+
+// Parse and pretty-print
+JSON.parse(localStorage.getItem('sim-history-store'))
+
+// Count entries
+JSON.parse(localStorage.getItem('sim-history-store')).state.history.length
+```
+
+### Manual Backup
+
+To backup your history:
+
+```javascript
+// Export to file
+const data = localStorage.getItem('sim-history-store');
+const blob = new Blob([data], { type: 'application/json' });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = 'egel-history-backup.json';
+a.click();
+```
+
+### Manual Restore
+
+To restore from backup:
+
+```javascript
+// Read backup file content, then:
+localStorage.setItem('sim-history-store', backupData);
+location.reload();
+```
+
+<Info>
+Consider implementing export/import buttons in the UI for easier backup and restore functionality.
+</Info>
+
+## Frequently Asked Questions
+
+<Accordion title="How long is history stored?">
+  History is stored **indefinitely** in `localStorage` until:
+  
+  - You manually clear browser data
+  - You call `clearHistory()`
+  - localStorage quota is exceeded (rare)
+  - You uninstall the application (in Electron desktop app)
+  
+  There's no automatic cleanup or expiration.
+</Accordion>
+
+<Accordion title="What's the maximum number of history entries?">
+  There's no hard limit in the code. Practical limits:
+  
+  - **localStorage**: ~5-10MB per domain
+  - **Each entry**: ~200-300 bytes
+  - **Estimated max**: 15,000-50,000 entries
+  
+  In practice, you'll likely never hit this limit. If you do, consider implementing:
+  
+  ```typescript
+  addEntry: (entry) => {
+    const newEntry: HistoryItem = {
+      id: crypto.randomUUID(),
+      ...entry,
+    };
+    const updated = [newEntry, ...get().history].slice(0, 1000);  // Keep only 1000
+    set({ history: updated });
+  },
+  ```
+</Accordion>
+
+<Accordion title="Can I delete individual history entries?">
+  Not through the UI currently, but you can add this feature:
+  
+  ```typescript
+  // Add to HistoryState interface
+  deleteEntry: (id: string) => void;
+  
+  // Add to store
+  deleteEntry: (id) => {
+    set({ history: get().history.filter(item => item.id !== id) });
+  },
+  
+  // Use in component
+  const deleteEntry = useHistoryStore((state) => state.deleteEntry);
+  
+  <button onClick={() => deleteEntry(item.id)}>
+    Delete
+  </button>
+  ```
+</Accordion>
+
+<Accordion title="Why does the score calculation use Math.floor(total * 0.7)?">
+  This is a **placeholder** for the actual scoring logic (`TestPage.tsx:56`):
+  
+  ```typescript
+  const correct = Math.floor(total * 0.7)  // Simulates 70% correct
+  ```
+  
+  In production, you should calculate actual correct answers:
+  
+  ```typescript
+  const correct = examQuestions.reduce((count, question) => {
+    const userAnswer = selectedAnswers[question.id];
+    return userAnswer === question.correctAnswerIndex ? count + 1 : count;
+  }, 0);
+  ```
+</Accordion>
+
+<Accordion title="Can I export history to CSV or PDF?">
+  Not currently, but you can implement this:
+  
+  **CSV Export:**
+  ```typescript
+  function exportToCSV() {
+    const csv = [
+      'Date,Time,Type,Mode,Timer,Score,Correct,Total',
+      ...history.map(item => 
+        `${item.date},${item.time},${item.type},${item.practiceMode ? 'Practice' : 'Simulation'},${item.timerEnabled ? 'Yes' : 'No'},${item.score},${item.correct},${item.total}`
+      )
+    ].join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'egel-history.csv';
+    a.click();
+  }
+  ```
+</Accordion>
+
+<Accordion title="Does history sync across devices?">
+  No, history is stored locally in `localStorage`. To enable cloud sync, you would need to:
+  
+  1. Set up a backend server
+  2. Implement user authentication
+  3. Store history in a database
+  4. Sync on app launch and after each exam
+  
+  Alternatively, use a service like Firebase:
+  
+  ```typescript
+  import { ref, set, onValue } from 'firebase/database';
+  
+  // Save to Firebase
+  const saveToCloud = (history) => {
+    set(ref(db, 'users/' + userId + '/history'), history);
+  };
+  
+  // Load from Firebase
+  onValue(ref(db, 'users/' + userId + '/history'), (snapshot) => {
+    const data = snapshot.val();
+    set({ history: data || [] });
+  });
+  ```
+</Accordion>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Regular Review" icon="eye">
+    - Check history after every few exams
+    - Look for score trends
+    - Identify your best conditions (timed/untimed, practice/simulation)
+    - Celebrate improvements
+  </Card>
+  <Card title="Set Goals" icon="bullseye">
+    - Target minimum scores (e.g., 80%)
+    - Aim for consistency (e.g., 3 consecutive 75%+ scores)
+    - Track improvement rate
+    - Adjust study plan based on data
+  </Card>
+  <Card title="Compare Conditions" icon="scale-balanced">
+    - Practice vs Simulation scores
+    - Timed vs Untimed performance
+    - Different question types (disciplinar vs transversal)
+    - Identify which conditions challenge you most
+  </Card>
+  <Card title="Data Hygiene" icon="broom">
+    - Backup history periodically
+    - Don't clear history unless necessary
+    - Consider exporting before major updates
+    - Keep track of when you started studying
+  </Card>
+</CardGroup>

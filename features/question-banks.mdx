@@ -1,0 +1,521 @@
+---
+title: 'Question Banks'
+description: 'Understanding question organization, filtering, and structure in EGEL Simulator'
+icon: 'database'
+---
+
+## Overview
+
+EGEL Simulator organizes questions into two main categories: **Disciplinary** and **Transversal** questions. This structure mirrors the actual EGEL exam format, where questions test both specialized knowledge in your field and general cross-cutting competencies.
+
+<CardGroup cols={2}>
+  <Card title="Disciplinary" icon="microscope">
+    Subject-specific questions related to your career field
+  </Card>
+  <Card title="Transversal" icon="arrows-cross">
+    General competency questions that apply across disciplines
+  </Card>
+</CardGroup>
+
+## Question Structure
+
+All questions in EGEL Simulator follow a standardized structure defined in `vite-env.d.ts:32-39`:
+
+```typescript
+interface EGELQuestion {
+  id: string;                    // Unique identifier (e.g., "q1")
+  question: string;               // Question text (supports Markdown)
+  options: string[];              // Array of answer choices
+  correctAnswerIndex: number;     // Index of correct answer (0-based)
+  block: "transversal" | "disciplinary";  // Question category
+  subtopic?: string;              // Optional subtopic tag
+}
+```
+
+### Field Breakdown
+
+<Tabs>
+  <Tab title="id">
+    **Unique Identifier**
+    
+    - Format: String (e.g., `"q1"`, `"q2"`)
+    - Used to track answer selections
+    - Must be unique across all questions
+    
+    ```typescript
+    const selectedAnswers: Record<string, number> = {};
+    // Maps question IDs to selected answer indices
+    ```
+  </Tab>
+  <Tab title="question">
+    **Question Text**
+    
+    - Format: String with Markdown support
+    - Can include code blocks, formatting, and line breaks
+    - Displayed as the main question prompt
+    
+    Example with code:
+    ```typescript
+    question: "Dado el siguiente fragmento de código en Python, ¿cuál es el valor de `resultado`?\n\n```python\nx = [1, 2, 3]\ny = x\nx.append(4)\nresultado = y\n```"
+    ```
+  </Tab>
+  <Tab title="options">
+    **Answer Choices**
+    
+    - Format: Array of strings
+    - Typically 4 options per question
+    - Can include inline code and formatting
+    
+    ```typescript
+    options: [
+      "`[1, 2, 3]`",
+      "`[1, 2, 3, 4]`",
+      "`[4]`",
+      "Error de asignación por referencia"
+    ]
+    ```
+  </Tab>
+  <Tab title="correctAnswerIndex">
+    **Correct Answer**
+    
+    - Format: Number (0-based index)
+    - Points to the correct option in the `options` array
+    - Used for scoring and feedback
+    
+    ```typescript
+    correctAnswerIndex: 1  // Second option is correct
+    ```
+  </Tab>
+  <Tab title="block">
+    **Question Category**
+    
+    - Format: `"disciplinary"` or `"transversal"`
+    - Used for filtering questions by type
+    - Note: User-facing types use Spanish ("disciplinar", "transversal")
+    
+    ```typescript
+    block: "disciplinary"  // Internal format
+    // Displayed as "Disciplinar" in UI
+    ```
+  </Tab>
+  <Tab title="subtopic">
+    **Optional Subtopic**
+    
+    - Format: Optional string
+    - Provides additional categorization
+    - Examples: `"operadores lógicos"`, `"estructuras de datos"`
+    
+    ```typescript
+    subtopic?: string;  // Optional field
+    ```
+  </Tab>
+</Tabs>
+
+## Question Categories
+
+### Disciplinary Questions
+
+Disciplinary questions test **specialized knowledge** specific to your career field. These questions are marked with `block: "disciplinary"`.
+
+#### Example: JavaScript Operators
+
+From `questions.ts:1-14`:
+
+```typescript
+{
+  id: "q1",
+  question: "¿Cuál de las siguientes opciones **describe correctamente** el uso del operador lógico `&&` en JavaScript?",
+  options: [
+    "`&&` evalúa ambas expresiones y retorna `true` si al menos una es verdadera.",
+    "`&&` detiene la evaluación si la primera expresión es verdadera.",
+    "`&&` evalúa de izquierda a derecha y retorna el **primer valor falso** o el último valor si todos son verdaderos.",
+    "`&&` siempre retorna un valor booleano.",
+  ],
+  correctAnswerIndex: 2,
+  block: "disciplinary",
+  subtopic: "operadores lógicos",
+}
+```
+
+#### Example: Python Data Structures
+
+From `questions.ts:15-27`:
+
+```typescript
+{
+  id: "q2",
+  question: "Dado el siguiente fragmento de código en Python, ¿cuál es el valor de `resultado`?\n\n```python\nx = [1, 2, 3]\ny = x\nx.append(4)\nresultado = y\n```",
+  options: [
+    "`[1, 2, 3]`",
+    "`[1, 2, 3, 4]`",
+    "`[4]`",
+    "Error de asignación por referencia",
+  ],
+  correctAnswerIndex: 1,
+  block: "disciplinary",
+  subtopic: "estructuras de datos",
+}
+```
+
+<Note>
+Disciplinary questions often include code snippets and require technical analysis. They test deep understanding of programming concepts.
+</Note>
+
+### Transversal Questions
+
+Transversal questions assess **general competencies** that apply across different disciplines. These questions are marked with `block: "transversal"`.
+
+#### Example: JavaScript Type Comparison
+
+From `questions.ts:28-39`:
+
+```typescript
+{
+  id: "q3",
+  question: "¿Cuál es la diferencia entre `==` y `===` en JavaScript?",
+  options: [
+    "`==` compara por referencia, `===` compara por valor.",
+    "`==` permite coerción de tipos, `===` compara tipos y valores estrictamente.",
+    "`==` es una versión más segura de `===`.",
+    "`===` convierte ambos operandos a `Number` antes de comparar.",
+  ],
+  correctAnswerIndex: 1,
+  block: "transversal",
+}
+```
+
+#### Example: Markdown Syntax
+
+From `questions.ts:40-51`:
+
+```typescript
+{
+  id: "q4",
+  question: "En Markdown, ¿cómo representas un bloque de código con sintaxis específica?\n\nSelecciona la opción correcta:",
+  options: [
+    "`<code lang=\"js\">...</code>`",
+    "Encerrando el código entre tres tildes: `~~~codigo~~~`",
+    "Usando tres backticks y el nombre del lenguaje: \n\n```\njs\nconsole.log('Hola');\n```",
+    "Solo usando una tabulación al inicio de cada línea",
+  ],
+  correctAnswerIndex: 2,
+  block: "transversal",
+}
+```
+
+<Info>
+Transversal questions tend to cover general programming knowledge, tools, and methodologies that are useful across different specializations.
+</Info>
+
+## Question Filtering
+
+### Simulation Types
+
+Users can choose which types of questions to practice with. The system supports three simulation types defined in `vite-env.d.ts:42`:
+
+```typescript
+type SimulationType = "disciplinar" | "transversal" | "ambas";
+```
+
+<CardGroup cols={3}>
+  <Card title="Disciplinar" icon="flask">
+    Only disciplinary questions
+  </Card>
+  <Card title="Transversal" icon="arrows-cross">
+    Only transversal questions
+  </Card>
+  <Card title="Ambas" icon="layer-group">
+    Mix of both types (default)
+  </Card>
+</CardGroup>
+
+### Type Mapping
+
+The system maps between user-facing Spanish types and internal English types (`questions.ts:53-59`):
+
+```typescript
+const typeMap = {
+  disciplinar: "disciplinary",
+  transversal: "transversal",
+  ambas: "ambas",
+} as const;
+
+type QuestionType = keyof typeof typeMap;
+```
+
+### Question Retrieval
+
+The `getQuestions` function filters questions based on the selected simulation type (`questions.ts:61-66`):
+
+```typescript
+export function getQuestions(type: QuestionType = "ambas"): EGELQuestion[] {
+  if (type === "ambas") return questions;
+
+  const mappedType = typeMap[type];
+  return questions.filter(q => q.block === mappedType);
+}
+```
+
+#### How It Works
+
+<Tabs>
+  <Tab title="Ambas (Both)">
+    When `type === "ambas"`, the function returns **all questions** without filtering:
+    
+    ```typescript
+    if (type === "ambas") return questions;
+    ```
+    
+    This provides the most comprehensive exam experience.
+  </Tab>
+  <Tab title="Disciplinar">
+    When `type === "disciplinar"`, the function:
+    1. Maps to internal type: `"disciplinary"`
+    2. Filters questions: `q.block === "disciplinary"`
+    3. Returns only disciplinary questions
+    
+    ```typescript
+    const mappedType = typeMap["disciplinar"];  // "disciplinary"
+    return questions.filter(q => q.block === mappedType);
+    ```
+  </Tab>
+  <Tab title="Transversal">
+    When `type === "transversal"`, the function:
+    1. Maps to internal type: `"transversal"`
+    2. Filters questions: `q.block === "transversal"`
+    3. Returns only transversal questions
+    
+    ```typescript
+    const mappedType = typeMap["transversal"];  // "transversal"
+    return questions.filter(q => q.block === mappedType);
+    ```
+  </Tab>
+</Tabs>
+
+## Using Questions in the Application
+
+### The useQuestions Hook
+
+Questions are loaded using the `useQuestions` custom hook (`useQuestions.tsx:4-27`):
+
+```typescript
+export function useQuestions(type: SimulationType = "ambas") {
+  const [questions, setQuestions] = useState<EGELQuestion[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      try {
+        const data = getQuestions(type);
+        setQuestions(data);
+      } catch (error) {
+        console.error("Error al obtener preguntas:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuestions();
+  }, [type]);
+
+  return {
+    questions,
+    loading,
+  };
+}
+```
+
+### Loading Questions in TestPage
+
+The TestPage component uses this hook to load questions based on configuration (`TestPage.tsx:10-11`):
+
+```typescript
+const config = useSetupStore((state) => state.config)
+const { questions: examQuestions, loading } = useQuestions();
+```
+
+<Tip>
+The hook automatically handles loading states, making it easy to show a loading indicator while questions are being retrieved.
+</Tip>
+
+### Displaying Question Metadata
+
+Question metadata is displayed in the exam interface (`TestPage.tsx:108-110`):
+
+```tsx
+<span className="px-4 py-1 bg-blue-100 text-blue-700 rounded-full font-medium capitalize">
+  {currentQuestion.block}
+</span>
+```
+
+This shows whether the current question is "disciplinary" or "transversal".
+
+## Question Bank Management
+
+### Current Question Bank
+
+The current implementation in `questions.ts` contains **4 sample questions**:
+- 2 disciplinary questions (JavaScript operators, Python data structures)
+- 2 transversal questions (JavaScript comparison, Markdown syntax)
+
+```typescript
+const questions: EGELQuestion[] = [
+  // 4 questions defined here
+];
+```
+
+### Expanding the Question Bank
+
+To add new questions, follow this structure:
+
+```typescript
+const questions: EGELQuestion[] = [
+  // Existing questions...
+  {
+    id: "q5",  // Unique ID
+    question: "Your question text here",
+    options: [
+      "Option A",
+      "Option B",
+      "Option C",
+      "Option D",
+    ],
+    correctAnswerIndex: 0,  // Index of correct answer
+    block: "disciplinary",  // or "transversal"
+    subtopic: "optional-subtopic",
+  },
+];
+```
+
+<Warning>
+Ensure each question has a unique `id`. Duplicate IDs will cause issues with answer tracking and may lead to incorrect scoring.
+</Warning>
+
+## Frequently Asked Questions
+
+<Accordion title="How are questions selected for an exam?">
+  Questions are selected based on the simulation type chosen on the Setup Page:
+  
+  - **Disciplinar**: Only questions with `block: "disciplinary"`
+  - **Transversal**: Only questions with `block: "transversal"`
+  - **Ambas**: All questions, regardless of block type
+  
+  The selection is performed by the `getQuestions()` function, which filters the question array based on the chosen type.
+</Accordion>
+
+<Accordion title="Can I choose specific subtopics?">
+  Currently, the application does not support filtering by subtopic. The `subtopic` field is stored for future functionality but not used in the question selection logic.
+  
+  To add subtopic filtering, you would need to extend the `getQuestions()` function:
+  
+  ```typescript
+  export function getQuestions(
+    type: QuestionType = "ambas",
+    subtopic?: string
+  ): EGELQuestion[] {
+    let filtered = type === "ambas" ? questions : questions.filter(q => q.block === typeMap[type]);
+    
+    if (subtopic) {
+      filtered = filtered.filter(q => q.subtopic === subtopic);
+    }
+    
+    return filtered;
+  }
+  ```
+</Accordion>
+
+<Accordion title="How is the correct answer stored?">
+  The correct answer is stored as a zero-based index in the `correctAnswerIndex` field:
+  
+  - `0` = First option
+  - `1` = Second option
+  - `2` = Third option
+  - `3` = Fourth option
+  
+  This index corresponds to the position in the `options` array. For example:
+  
+  ```typescript
+  options: ["Wrong", "Correct", "Wrong", "Wrong"],
+  correctAnswerIndex: 1  // Points to "Correct"
+  ```
+</Accordion>
+
+<Accordion title="Are questions randomized?">
+  In the current implementation, questions are **not randomized**. They appear in the same order as defined in the `questions` array.
+  
+  To add randomization, you could modify the `getQuestions()` function:
+  
+  ```typescript
+  export function getQuestions(type: QuestionType = "ambas"): EGELQuestion[] {
+    const filtered = type === "ambas" 
+      ? questions 
+      : questions.filter(q => q.block === typeMap[type]);
+    
+    // Shuffle the array
+    return filtered.sort(() => Math.random() - 0.5);
+  }
+  ```
+</Accordion>
+
+<Accordion title="What happens if there are no questions for the selected type?">
+  If the filter returns an empty array (no questions match the selected type), the exam will still load but will have no questions to display.
+  
+  The TestPage component handles this by checking the array length:
+  
+  ```typescript
+  const currentQuestion = examQuestions[currentQuestionIndex]
+  ```
+  
+  If `examQuestions.length === 0`, this will be `undefined`, which could cause errors. Consider adding validation:
+  
+  ```typescript
+  if (examQuestions.length === 0) {
+    return <div>No hay preguntas disponibles para este tipo de simulacro.</div>;
+  }
+  ```
+</Accordion>
+
+<Accordion title="How do I add questions with images?">
+  While the current question structure supports text and Markdown, you can include images using Markdown syntax:
+  
+  ```typescript
+  {
+    id: "q6",
+    question: "Observa el siguiente diagrama:\n\n![Diagram](path/to/image.png)\n\nWhat does it represent?",
+    options: [...],
+    correctAnswerIndex: 0,
+    block: "disciplinary",
+  }
+  ```
+  
+  Make sure the image path is accessible from the renderer process in the Electron application.
+</Accordion>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Question Quality" icon="star">
+    - Write clear, unambiguous questions
+    - Ensure only one correct answer
+    - Make distractors plausible but clearly wrong
+    - Test a single concept per question
+  </Card>
+  <Card title="Code Examples" icon="code">
+    - Use proper syntax highlighting
+    - Keep code snippets concise
+    - Test the code before adding it
+    - Include necessary context
+  </Card>
+  <Card title="Categorization" icon="tags">
+    - Accurately classify as disciplinary or transversal
+    - Use consistent subtopic naming
+    - Group related questions by subtopic
+    - Document subtopic meanings
+  </Card>
+  <Card title="Maintenance" icon="wrench">
+    - Review questions periodically
+    - Update outdated technical content
+    - Remove ambiguous questions
+    - Track question difficulty
+  </Card>
+</CardGroup>

@@ -1,0 +1,304 @@
+---
+title: License Activation
+description: Complete guide to activating and managing your EGEL Simulator license
+---
+
+EGEL Simulator uses a product key-based licensing system that binds your license to your specific machine. This ensures secure access to the application while protecting against unauthorized use.
+
+## How License Activation Works
+
+The license system operates through a secure multi-layer validation process:
+
+### Machine ID Binding
+
+When you activate a license, it becomes permanently associated with your device's unique machine ID. This is generated using the `node-machine-id` library and ensures that:
+
+- Each license can only be activated on one machine
+- Your activation persists across application restarts
+- The license cannot be transferred to another device without deactivation
+
+```javascript
+// Machine ID retrieval from licenseActivation.handler.js:110
+const machineId = machineIdSync();
+```
+
+### Three-Layer Validation
+
+The activation system validates licenses at three levels:
+
+1. **Remote Validation** - Checks against Supabase backend via `remoteLicense.services.js`
+2. **Local Storage** - Saves activation to SQLite database via `licenseActivation.services.js`
+3. **Signature Verification** - Cryptographically signs the activation to prevent tampering
+
+<Note>
+The signature is generated from the combination of your `productKey` and `machineId`, making it impossible to forge or alter without detection.
+</Note>
+
+## Activating Your License
+
+<Steps>
+  <Step title="Launch the Application">
+    When you first open EGEL Simulator, you'll be presented with the AuthPage. This is the license activation screen where you'll enter your product key.
+  </Step>
+
+  <Step title="Enter Your Product Key">
+    Your product key is a UUID (Universally Unique Identifier) in the format:
+    
+    ```
+    xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    ```
+    
+    As you type, the input will automatically format the key correctly. The field accepts:
+    - Hexadecimal characters (0-9, a-f)
+    - Automatic hyphen insertion
+    - Maximum 36 characters (32 hex + 4 hyphens)
+
+    ```typescript
+    // Auto-formatting from AuthPage.tsx:17-33
+    const formatProductKey = (value: string) => {
+        const cleaned = value.replace(/[^0-9a-f-]/gi, "").toLowerCase()
+        let formatted = cleaned.replace(/-/g, "")
+        if (formatted.length > 32) formatted = formatted.slice(0, 32)
+        
+        const parts = []
+        if (formatted.length > 0) parts.push(formatted.slice(0, 8))
+        if (formatted.length > 8) parts.push(formatted.slice(8, 12))
+        if (formatted.length > 12) parts.push(formatted.slice(12, 16))
+        if (formatted.length > 16) parts.push(formatted.slice(16, 20))
+        if (formatted.length > 20) parts.push(formatted.slice(20, 32))
+        
+        return parts.join("-")
+    }
+    ```
+  </Step>
+
+  <Step title="Validate the Key">
+    Click the **"Validar Clave"** button to initiate the validation process. The application will:
+    
+    1. Validate the UUID format using regex pattern matching
+    2. Send an IPC request to the main process via `licenseActivation:verifyAndActivateKey`
+    3. Query Supabase to verify the license exists and is active
+    4. Check if the license is already bound to another machine
+    5. Bind the license to your machine ID if validation passes
+    6. Store the activation locally with a cryptographic signature
+
+    During validation, you'll see a loading state with a spinner:
+    
+    ```
+    Validando clave...
+    ```
+  </Step>
+
+  <Step title="Automatic Redirection">
+    Once validation succeeds:
+    
+    - A green checkmark appears
+    - The success message displays: **"¡Clave válida! Redirigiendo..."**
+    - The license store refreshes via `useLicenseStore.refresh()`
+    - You're automatically redirected to `/home`
+
+    ```typescript
+    // Success flow from AuthPage.tsx:53-57
+    const result = await verifyKey(key);
+    if (result.success) {
+        await refresh();
+        setIsKeyValid(true);
+        navigate("/home");
+    }
+    ```
+  </Step>
+</Steps>
+
+## IPC Channels Used
+
+The activation process uses several IPC channels to communicate between the renderer and main processes:
+
+| Channel | Purpose | Parameters |
+|---------|---------|------------|
+| `licenseActivation:verifyAndActivateKey` | Validates and activates a product key | `productKey: string` |
+| `licenseActivation:verifyLocalActivation` | Validates locally stored license | None |
+| `licenseActivation:findFirst` | Retrieves first stored license | None |
+| `licenseActivation:findByProductKey` | Searches by product key | `productKey: string` |
+| `licenseActivation:deleteAll` | Removes all local licenses | None |
+
+<Tip>
+These channels are defined in `/source/main/ipc/handlers/licenseActivation.handler.js` and are accessible via `window.api.licenseActivation` in the renderer process.
+</Tip>
+
+## Troubleshooting Common Issues
+
+### "Formato de clave inválido"
+
+**Problem**: The product key doesn't match the UUID format.
+
+**Solution**: Ensure your key:
+- Contains only hexadecimal characters (0-9, a-f)
+- Has exactly 32 hexadecimal digits
+- Follows the pattern: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+
+```typescript
+// UUID validation from AuthPage.tsx:46
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+```
+
+### "La clave ya ha sido activada en otro dispositivo"
+
+**Problem**: License is already bound to a different machine ID.
+
+**Solution**: You'll need to either:
+1. Use the same device where you first activated the license
+2. Contact support to deactivate the license from the previous device
+3. Purchase an additional license for the new device
+
+```javascript
+// Machine ID check from licenseActivation.handler.js:122-124
+if (license.machineId && license.machineId !== machineId) {
+    return errorResponse('LICENSE_ALREADY_BOUND', 'Esta clave ya está activada en otro dispositivo.');
+}
+```
+
+### "La clave ingresada no está activa"
+
+**Problem**: The license status in the database is not 'active'.
+
+**Solution**: Your license may be:
+- Expired
+- Revoked by an administrator
+- Not yet activated by the license provider
+
+Contact support to resolve the license status.
+
+```javascript
+// Status check from licenseActivation.handler.js:118-120
+if (license.status !== 'active') {
+    return errorResponse('LICENSE_INACTIVE', 'Licencia inactiva o revocada. Contacte al soporte.');
+}
+```
+
+### "No se pudo activar la clave. Intenta más tarde."
+
+**Problem**: Failed to bind the license to your machine in the remote database.
+
+**Solution**: This usually indicates:
+- Network connectivity issues
+- Supabase backend is temporarily unavailable
+- Database write permissions issue
+
+Wait a few minutes and try again. If the problem persists, check your internet connection.
+
+### Invalid Signature on Local Validation
+
+**Problem**: The locally stored license signature doesn't match the expected value.
+
+**Solution**: This indicates possible:
+- Database corruption
+- Manual tampering with the local database
+- Machine ID has changed (hardware modification)
+
+The application will automatically delete the corrupted license. You'll need to re-activate using your product key.
+
+```javascript
+// Signature verification from licenseActivation.handler.js:186-191
+const isValid = verifySignature(payload, license.signature);
+
+if (!isValid) {
+    await licenseActivationService.delete(license.id);
+    return errorResponse('INVALID_SIGNATURE', 'La firma de la licencia no es válida.');
+}
+```
+
+## License Validation on Startup
+
+Every time you launch EGEL Simulator, the application validates your stored license:
+
+```typescript
+// From useLicenseStore.tsx:13-17
+refresh: async () => {
+    set({ loading: true });
+    const valid = await verifyLocalKey();
+    set({ isValid: valid, loading: false });
+}
+```
+
+This calls `licenseActivation:verifyLocalActivation` which:
+1. Retrieves the first stored license
+2. Reconstructs the signature payload
+3. Verifies the cryptographic signature
+4. Returns validation status
+
+If validation fails, you'll be redirected back to the AuthPage to re-activate.
+
+## Deactivation
+
+To deactivate a license from your current machine:
+
+<Warning>
+Deactivation permanently removes the license from your local database. You'll need to re-enter your product key to use the application again.
+</Warning>
+
+Deactivation can be triggered via:
+
+```javascript
+// Remove all local licenses
+await window.api.licenseActivation.deleteAll();
+```
+
+This:
+- Deletes all records from the local `LicenseActivation` table
+- Does NOT unbind the license from the remote Supabase database
+- Requires manual support intervention to transfer the license to a new device
+
+## Technical Implementation Details
+
+### Database Schema
+
+Licenses are stored locally in a SQLite database with the following structure:
+
+```javascript
+// LicenseActivation model fields
+{
+    id: number,              // Auto-increment primary key
+    productKey: string,      // UUID, UNIQUE constraint
+    machineId: string,       // Hardware identifier
+    signature: string,       // Cryptographic signature
+    createdAt: timestamp,    // Activation timestamp
+    updatedAt: timestamp     // Last update timestamp
+}
+```
+
+### Signature Generation
+
+The signature is generated by hashing the payload containing both `productKey` and `machineId`:
+
+```javascript
+// From licenseActivation.handler.js:136-145
+const payload = {
+    productKey,
+    machineId,
+};
+
+const signature = generateSignature(payload);
+
+const localActivation = await licenseActivationService.create({
+    ...payload,
+    signature,
+});
+```
+
+This ensures that any modification to either field will invalidate the signature.
+
+## Error Code Reference
+
+| Error Code | Meaning | User-Facing Message |
+|------------|---------|--------------------|
+| `LICENSE_NOT_FOUND` | Product key doesn't exist in database | "La clave ingresada no es válida" |
+| `LICENSE_INACTIVE` | License status is not 'active' | "La clave ingresada no está activa" |
+| `LICENSE_ALREADY_BOUND` | Already activated on different machine | "La clave ya ha sido activada en otro dispositivo" |
+| `BIND_FAILED` | Failed to update remote database | "No se pudo activar la clave" |
+| `INVALID_SIGNATURE` | Local signature verification failed | "La firma de la licencia no es válida" |
+| `NO_LOCAL_LICENSE` | No license found in local database | "No se encontró una licencia local" |
+| `UNEXPECTED_ERROR` | Unhandled exception | "Ha ocurrido un error inesperado" |
+
+<Tip>
+Error codes are mapped to user-friendly Spanish messages in `/source/renderer/src/features/auth/services/verifyKey.ts`
+</Tip>

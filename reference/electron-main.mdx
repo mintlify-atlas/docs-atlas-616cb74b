@@ -1,0 +1,341 @@
+---
+title: Electron Main Process
+description: Complete reference for EGEL Simulator's main process architecture, including app lifecycle, window configuration, and security settings
+---
+
+## Overview
+
+The Electron main process (`main.js`) is responsible for creating application windows, managing the app lifecycle, initializing the database, and registering IPC handlers. It serves as the backend of the EGEL Simulator desktop application.
+
+## Main Process Architecture
+
+### Application Entry Point
+
+```javascript
+const { app, BrowserWindow, ipcMain, Notification } = require('electron');
+const db = require('./db/index.js');
+const { registerIpcHandlers } = require('./ipc/index.js');
+const path = require('path');
+```
+
+The main process imports core Electron modules and application-specific services:
+
+<ParamField path="app" type="Electron.App">
+  Controls the application lifecycle (ready, quit, activate events)
+</ParamField>
+
+<ParamField path="BrowserWindow" type="Electron.BrowserWindow">
+  Creates and manages application windows
+</ParamField>
+
+<ParamField path="ipcMain" type="Electron.IpcMain">
+  Handles inter-process communication from renderer to main
+</ParamField>
+
+<ParamField path="db" type="Database">
+  SQLite database instance with Sequelize ORM
+</ParamField>
+
+<ParamField path="registerIpcHandlers" type="Function">
+  Registers all IPC handlers for license management
+</ParamField>
+
+## Window Creation
+
+### createWindow Function
+
+The `createWindow()` function creates the main application window with specific configuration:
+
+```javascript
+function createWindow() {
+    const win = new BrowserWindow({
+        width: 900,
+        height: 700,
+        minWidth: 400,
+        minHeight: 500,
+        resizable: true,
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
+            devTools: !app.isPackaged,
+        },
+        autoHideMenuBar: true,
+    });
+
+    if (!app.isPackaged) {
+        win.loadURL('http://localhost:5173');
+        win.webContents.openDevTools();
+    } else {
+        win.loadFile(path.join(__dirname, '../renderer/dist/index.html'));
+    }
+
+    win.show();
+}
+```
+
+### BrowserWindow Configuration
+
+<ParamField path="width" type="number" default="900">
+  Initial window width in pixels
+</ParamField>
+
+<ParamField path="height" type="number" default="700">
+  Initial window height in pixels
+</ParamField>
+
+<ParamField path="minWidth" type="number" default="400">
+  Minimum window width constraint
+</ParamField>
+
+<ParamField path="minHeight" type="number" default="500">
+  Minimum window height constraint
+</ParamField>
+
+<ParamField path="resizable" type="boolean" default="true">
+  Allows users to resize the window
+</ParamField>
+
+<ParamField path="autoHideMenuBar" type="boolean" default="true">
+  Automatically hides the application menu bar
+</ParamField>
+
+### Web Preferences (Security Settings)
+
+<ParamField path="webPreferences.preload" type="string">
+  Path to the preload script that bridges renderer and main processes
+</ParamField>
+
+<ParamField path="webPreferences.nodeIntegration" type="boolean" default="false">
+  **CRITICAL SECURITY**: Disables Node.js integration in renderer for security
+</ParamField>
+
+<ParamField path="webPreferences.contextIsolation" type="boolean" default="true">
+  **CRITICAL SECURITY**: Isolates renderer context from preload script
+</ParamField>
+
+<ParamField path="webPreferences.devTools" type="boolean">
+  Enables DevTools only in development mode (`!app.isPackaged`)
+</ParamField>
+
+<Note>
+  **Security Best Practices**: The combination of `nodeIntegration: false` and `contextIsolation: true` ensures the renderer process cannot directly access Node.js APIs, preventing potential security vulnerabilities.
+</Note>
+
+## Preload Script
+
+The preload script (`preload.js`) uses `contextBridge` to expose safe IPC methods to the renderer process:
+
+```javascript
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('api', {
+    licenseActivation: {
+        /**
+         * Busca una activación por clave de producto.
+         * @param {string} productKey
+         * @returns {Promise<Object|null>}
+         */
+        findByProductKey: (productKey) => 
+            ipcRenderer.invoke('licenseActivation:findByProductKey', productKey),
+
+        /**
+         * Verifica si existe una activación local válida.
+         * @returns {Promise<Object|null>}
+         */
+        verifyLocalActivation: () => 
+            ipcRenderer.invoke('licenseActivation:verifyLocalActivation'),
+
+        /**
+         * Valida una licencia remota en Supabase.
+         * @param {string} productKey
+         * @returns {Promise<Object|null>}
+         */
+        verifyAndActivateKey: (productKey) => 
+            ipcRenderer.invoke('licenseActivation:verifyAndActivateKey', productKey),
+    },
+});
+```
+
+### contextBridge API
+
+The `window.api` object is exposed to the renderer with the following structure:
+
+<ParamField path="api.licenseActivation.findByProductKey" type="(productKey: string) => Promise<Object|null>">
+  Searches for a license activation by product key
+</ParamField>
+
+<ParamField path="api.licenseActivation.verifyLocalActivation" type="() => Promise<Object|null>">
+  Verifies if a valid local activation exists
+</ParamField>
+
+<ParamField path="api.licenseActivation.verifyAndActivateKey" type="(productKey: string) => Promise<Object>">
+  Validates and activates a product key against remote Supabase database
+</ParamField>
+
+<Note>
+  All methods return Promises that resolve to IPC response objects with `{ success, data, error }` structure.
+</Note>
+
+## Application Lifecycle
+
+### App Ready Event
+
+```javascript
+app.whenReady().then(async () => {
+    try {
+        await db.sequelize.sync({ force: false });
+        registerIpcHandlers();
+        createWindow();
+    } catch (error) {
+        console.error(error);
+    }
+});
+```
+
+Initialization sequence:
+
+1. **Database Sync**: `db.sequelize.sync({ force: false })` creates tables if they don't exist
+2. **IPC Registration**: `registerIpcHandlers()` registers all license management handlers
+3. **Window Creation**: `createWindow()` displays the main application window
+
+<ParamField path="db.sequelize.sync" type="(options: { force: boolean }) => Promise<void>">
+  Synchronizes Sequelize models with SQLite database. `force: false` preserves existing data.
+</ParamField>
+
+### Window Management
+
+```javascript
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+```
+
+<ParamField path="window-all-closed" type="Event">
+  Quits the app when all windows are closed (except on macOS)
+</ParamField>
+
+<ParamField path="activate" type="Event">
+  Recreates a window when the app is activated with no windows open (macOS behavior)
+</ParamField>
+
+## Hardware Acceleration
+
+```javascript
+app.disableHardwareAcceleration();
+```
+
+<Note>
+  Hardware acceleration is disabled to ensure compatibility across different systems and prevent GPU-related rendering issues.
+</Note>
+
+## Development vs Production
+
+The app behavior changes based on the `app.isPackaged` flag:
+
+<Tabs>
+  <Tab title="Development">
+    ```javascript
+    if (!app.isPackaged) {
+        win.loadURL('http://localhost:5173'); // Vite dev server
+        win.webContents.openDevTools();
+    }
+    ```
+    
+    - Loads from local development server (Vite on port 5173)
+    - Opens DevTools automatically
+    - DevTools enabled in webPreferences
+  </Tab>
+  
+  <Tab title="Production">
+    ```javascript
+    else {
+        win.loadFile(path.join(__dirname, '../renderer/dist/index.html'));
+    }
+    ```
+    
+    - Loads from bundled static files
+    - DevTools disabled
+    - Optimized for distribution
+  </Tab>
+</Tabs>
+
+## Database Initialization
+
+The SQLite database is initialized in `db/index.js`:
+
+```javascript
+const path = require('path');
+const { app } = require('electron');
+const { Sequelize } = require('sequelize');
+
+const storagePath = path.join(app.getPath('userData'), 'data.sqlite');
+
+const sequelize = new Sequelize({
+    dialect: 'sqlite',
+    storage: storagePath,
+    logging: false,
+});
+```
+
+<ParamField path="dialect" type="string" default="sqlite">
+  Database type (SQLite for local storage)
+</ParamField>
+
+<ParamField path="storage" type="string">
+  Database file location in user data directory (`app.getPath('userData')`)
+</ParamField>
+
+<ParamField path="logging" type="boolean" default="false">
+  Disables SQL query logging for production
+</ParamField>
+
+## IPC Handler Registration
+
+All IPC handlers are registered through a centralized function:
+
+```javascript
+const { registerLicenseActivationHandlers } = require('./handlers/licenseActivation.handler.js');
+
+const registerIpcHandlers = () => {
+    registerLicenseActivationHandlers();
+};
+```
+
+See [IPC Handlers](/reference/ipc-handlers) for complete API reference.
+
+## File Structure
+
+```
+main/
+├── main.js                 # Main process entry point
+├── preload.js             # Preload script (contextBridge)
+├── db/
+│   ├── index.js           # Database initialization
+│   └── models/
+│       └── LicenseActivation.js
+├── ipc/
+│   ├── index.js           # IPC handler registration
+│   ├── handlers/
+│   │   └── licenseActivation.handler.js
+│   └── utils/
+│       ├── ipcResponse.js # Response helpers
+│       └── signature.js   # Cryptographic signatures
+└── services/
+    ├── licenseActivation.services.js
+    └── remoteLicense.services.js
+```
+
+## Next Steps
+
+<Card title="IPC Handlers" icon="arrows-left-right" href="/reference/ipc-handlers">
+  Learn about all available IPC communication channels
+</Card>
+
+<Card title="Database Schema" icon="database" href="/reference/database-schema">
+  Explore the LicenseActivation model and database structure
+</Card>

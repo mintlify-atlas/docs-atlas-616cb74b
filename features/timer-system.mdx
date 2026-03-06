@@ -1,0 +1,550 @@
+---
+title: 'Timer System'
+description: 'Understanding timer configuration, behavior, and visual warnings in EGEL Simulator'
+icon: 'clock'
+---
+
+## Overview
+
+The timer system in EGEL Simulator provides a **countdown timer** that simulates real exam time constraints. The timer is fully configurable and includes visual warnings when time is running low.
+
+<CardGroup cols={2}>
+  <Card title="Configurable" icon="sliders">
+    Enable or disable the timer based on your study needs
+  </Card>
+  <Card title="Visual Warnings" icon="triangle-exclamation">
+    Red pulsing display when time drops below 5 minutes
+  </Card>
+</CardGroup>
+
+## Timer Configuration
+
+The timer is controlled by configuration stored in the setup store (`useSetupStore.tsx:3-8`):
+
+```typescript
+type SimulationSettings = {
+  area: SimulationType;
+  timerEnabled: boolean;   // Controls whether timer is active
+  duration: number;        // Timer duration in seconds
+  practiceMode: boolean;
+};
+```
+
+### Setting Up the Timer
+
+On the Setup Page, users can enable or disable the timer before starting an exam (`SetupPage.tsx:12, 86-98`):
+
+```tsx
+const [timerEnabled, setTimerEnabled] = useState(true);
+
+// UI Component
+<div className="absolute bottom-28 right-16">
+  <label className="flex items-center space-x-2">
+    <input
+      id="enable-timer"
+      type="checkbox"
+      checked={timerEnabled}
+      onChange={() => setTimerEnabled(!timerEnabled)}
+      className="form-checkbox w-4 h-4 text-green-600 border-gray-300 rounded accent-green-600"
+    />
+    <span className="text-sm text-gray-700">Activar temporizador</span>
+  </label>
+</div>
+```
+
+### Default Timer Duration
+
+The timer is set to **40,000 seconds** (approximately 11 hours) by default (`SetupPage.tsx:19`):
+
+```typescript
+const simulationSettings = {
+  area: selectedArea,
+  timerEnabled: timerEnabled,
+  duration: 40000,  // 40,000 seconds
+  practiceMode: practiceMode,
+};
+```
+
+<Note>
+The default duration of 40,000 seconds appears to be a placeholder value. For realistic exam simulation, consider adjusting this to match actual EGEL exam durations (typically 3-4 hours or 10,800-14,400 seconds).
+</Note>
+
+## Timer Implementation
+
+### Initialization
+
+The timer state is initialized when the TestPage loads (`TestPage.tsx:18`):
+
+```typescript
+const [timeLeft, setTimeLeft] = useState(config?.duration ?? 0)
+```
+
+The initial value comes from the configuration, with a fallback to 0 if no configuration exists.
+
+### Countdown Logic
+
+The timer uses a `useEffect` hook with a 1-second interval (`TestPage.tsx:29-39`):
+
+```typescript
+// Temporizador
+useEffect(() => {
+  if (!config?.timerEnabled) return
+  
+  const interval = setInterval(() => {
+    setTimeLeft((prev) => {
+      if (prev <= 1) clearInterval(interval)
+      return prev - 1
+    })
+  }, 1000)
+  
+  return () => clearInterval(interval)
+}, [config])
+```
+
+<Tabs>
+  <Tab title="How It Works">
+    1. **Check if enabled**: If `timerEnabled` is `false`, the effect returns early and no timer runs
+    2. **Create interval**: `setInterval` executes every 1000ms (1 second)
+    3. **Update state**: Each tick decrements `timeLeft` by 1
+    4. **Stop at zero**: When `prev <= 1`, the interval is cleared
+    5. **Cleanup**: The cleanup function clears the interval when the component unmounts
+  </Tab>
+  <Tab title="Key Behaviors">
+    - **Automatic start**: Timer starts immediately when the exam begins
+    - **No pause**: There's no built-in pause functionality
+    - **Stops at 1**: Timer stops when it reaches 1 second (not 0)
+    - **No auto-submit**: Reaching zero does not automatically submit the exam
+  </Tab>
+  <Tab title="Dependencies">
+    The effect depends on `config`:
+    
+    ```typescript
+    }, [config])
+    ```
+    
+    This means the timer resets if the configuration changes during the exam (though this shouldn't happen in normal use).
+  </Tab>
+</Tabs>
+
+<Info>
+The timer does not automatically end the exam when time expires. Users can continue answering questions even after the timer reaches zero.
+</Info>
+
+## Timer Display
+
+### Conditional Rendering
+
+The timer display only appears when enabled (`TestPage.tsx:113-121`):
+
+```tsx
+{config.timerEnabled && (
+  <div className="flex items-center gap-2 text-lg font-mono text-gray-700 animate-fade-in">
+    <ClockIcon className="w-5 h-5 text-blue-500" />
+    <span className={timeLeft < 300 ? "text-red-600 font-semibold animate-pulse" : ""}>
+      {formatTime(timeLeft)}
+    </span>
+  </div>
+)}
+```
+
+### Time Formatting
+
+The `formatTime` function converts seconds to MM:SS format (`TestPage.tsx:80-84`):
+
+```typescript
+const formatTime = (seconds: number) => {
+  const min = Math.floor(seconds / 60)
+  const sec = seconds % 60
+  return `${min}:${sec.toString().padStart(2, "0")}`
+}
+```
+
+#### Format Examples
+
+| Seconds | Display |
+|---------|--------|
+| 40000 | `666:40` |
+| 3600 | `60:00` |
+| 300 | `5:00` |
+| 299 | `4:59` |
+| 65 | `1:05` |
+| 5 | `0:05` |
+| 0 | `0:00` |
+
+<Tip>
+The timer uses a monospace font (`font-mono`) to prevent width changes as numbers update, ensuring a stable UI.
+</Tip>
+
+## Visual Warnings
+
+### Low Time Warning
+
+When time remaining drops below **5 minutes (300 seconds)**, the timer display changes to grab attention (`TestPage.tsx:116`):
+
+```tsx
+<span className={timeLeft < 300 ? "text-red-600 font-semibold animate-pulse" : ""}>
+  {formatTime(timeLeft)}
+</span>
+```
+
+<CardGroup cols={2}>
+  <Card title="Normal Display" icon="clock">
+    **Above 5 minutes**
+    
+    - Default text color (gray-700)
+    - Normal font weight
+    - No animation
+    - Calm, unobtrusive appearance
+  </Card>
+  <Card title="Warning Display" icon="bell">
+    **Below 5 minutes**
+    
+    - Red text color (text-red-600)
+    - Bold font (font-semibold)
+    - Pulsing animation (animate-pulse)
+    - Eye-catching, urgent appearance
+  </Card>
+</CardGroup>
+
+### Warning Threshold
+
+The 300-second (5-minute) threshold is hardcoded:
+
+```typescript
+timeLeft < 300  // Triggers warning state
+```
+
+<Accordion title="Why 5 minutes?">
+  Five minutes is a common threshold for exam warnings because it:
+  - Provides enough time to finish 1-2 remaining questions
+  - Creates urgency without panic
+  - Matches real exam warning practices
+  - Gives a clear mental signal to wrap up
+</Accordion>
+
+## Timer in Exam Flow
+
+### Header Display
+
+The timer is prominently displayed in the exam header alongside other metadata (`TestPage.tsx:102-121`):
+
+```tsx
+<div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-6">
+  <div className="flex justify-between items-center mb-4">
+    <div className="flex items-center gap-3 text-sm">
+      <span className="px-4 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold shadow-inner">
+        {config.practiceMode ? "Modo Práctica" : "Simulacro"}
+      </span>
+      <span className="px-4 py-1 bg-blue-100 text-blue-700 rounded-full font-medium capitalize">
+        {currentQuestion.block}
+      </span>
+    </div>
+
+    {config.timerEnabled && (
+      <div className="flex items-center gap-2 text-lg font-mono text-gray-700 animate-fade-in">
+        <ClockIcon className="w-5 h-5 text-blue-500" />
+        <span className={timeLeft < 300 ? "text-red-600 font-semibold animate-pulse" : ""}>
+          {formatTime(timeLeft)}
+        </span>
+      </div>
+    )}
+  </div>
+  {/* Progress bar and question counter */}
+</div>
+```
+
+### Timer in History
+
+Whether the timer was enabled is recorded in the exam history (`TestPage.tsx:69, HistoryPage.tsx:79-82`):
+
+```typescript
+addHistoryEntry({
+  date,
+  time,
+  score,
+  correct,
+  total,
+  type: config!.area,
+  timerEnabled: config!.timerEnabled,  // Recorded in history
+  practiceMode: config!.practiceMode,
+});
+```
+
+This is displayed on the History Page:
+
+```tsx
+<span className="flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-full">
+  <Timer className="w-4 h-4" />
+  {item.timerEnabled ? "Cronometrado" : "Sin cronómetro"}
+</span>
+```
+
+<Info>
+Tracking timer status in history allows you to compare performance between timed and untimed exams.
+</Info>
+
+## Timer Behavior Scenarios
+
+### With Timer Enabled
+
+```typescript
+// Configuration
+{
+  timerEnabled: true,
+  duration: 40000,
+  // ...
+}
+```
+
+**What happens:**
+1. ✅ Timer appears in exam header
+2. ✅ Countdown begins at 666:40 (40000 seconds)
+3. ✅ Decrements by 1 every second
+4. ✅ Turns red and pulses at 5:00 remaining
+5. ✅ Stops at 0:00 but exam continues
+6. ✅ "Cronometrado" badge appears in history
+
+### With Timer Disabled
+
+```typescript
+// Configuration
+{
+  timerEnabled: false,
+  duration: 40000,  // Ignored
+  // ...
+}
+```
+
+**What happens:**
+1. ❌ Timer does not appear in exam header
+2. ❌ No countdown occurs
+3. ❌ No time pressure
+4. ✅ Exam functions normally otherwise
+5. ✅ "Sin cronómetro" badge appears in history
+
+<Tabs>
+  <Tab title="Practice Mode + Timer ON">
+    **Ideal for: Speed training**
+    
+    - Learn content with immediate feedback
+    - Build speed and time management
+    - Reduce time per question over practice sessions
+    - Prepare for both content and timing
+  </Tab>
+  <Tab title="Practice Mode + Timer OFF">
+    **Ideal for: Content mastery**
+    
+    - Focus purely on understanding
+    - No pressure to rush
+    - Think deeply about each question
+    - Best for initial learning
+  </Tab>
+  <Tab title="Simulation Mode + Timer ON">
+    **Ideal for: Exam simulation**
+    
+    - Most realistic exam experience
+    - Test readiness under pressure
+    - Practice pacing strategies
+    - Recommended final preparation
+  </Tab>
+  <Tab title="Simulation Mode + Timer OFF">
+    **Ideal for: Skill assessment**
+    
+    - Evaluate knowledge without time pressure
+    - Determine if errors are knowledge gaps or time pressure
+    - Useful for diagnostic purposes
+    - Less realistic but informative
+  </Tab>
+</Tabs>
+
+## Customizing Timer Duration
+
+To change the default timer duration, modify the configuration in `SetupPage.tsx:19`:
+
+### Current Default
+
+```typescript
+const simulationSettings = {
+  area: selectedArea,
+  timerEnabled: timerEnabled,
+  duration: 40000,  // 40,000 seconds (11.1 hours)
+  practiceMode: practiceMode,
+};
+```
+
+### Recommended EGEL Durations
+
+```typescript
+// For standard EGEL exam (3 hours)
+duration: 10800  // 3 hours = 180 minutes = 10,800 seconds
+
+// For extended EGEL exam (4 hours)
+duration: 14400  // 4 hours = 240 minutes = 14,400 seconds
+
+// For practice sessions (30 minutes)
+duration: 1800   // 30 minutes = 1,800 seconds
+```
+
+### Dynamic Duration Based on Question Count
+
+For a more realistic experience, you could calculate duration based on the number of questions:
+
+```typescript
+// Allow 2 minutes per question
+const questionsCount = getQuestions(selectedArea).length;
+const duration = questionsCount * 120;  // 120 seconds per question
+```
+
+<Warning>
+Changing the duration requires modifying the source code. There's currently no UI control for users to set custom timer durations.
+</Warning>
+
+## Frequently Asked Questions
+
+<Accordion title="What happens when the timer reaches zero?">
+  Currently, **nothing happens automatically**. The timer stops at 0:00, but:
+  
+  - The exam does not auto-submit
+  - You can continue answering questions
+  - Navigation buttons remain functional
+  - You must manually click "Finalizar" to end the exam
+  
+  This allows you to complete the exam even if you run out of time, but it's noted that you exceeded the time limit.
+</Accordion>
+
+<Accordion title="Can I pause the timer?">
+  No, there's no pause functionality in the current implementation. Once the timer starts, it runs continuously until:
+  
+  - It reaches 0:00
+  - You complete the exam
+  - You exit the exam
+  
+  To add pause functionality, you would need to:
+  1. Add a pause button to the UI
+  2. Store a `paused` state
+  3. Conditionally run the interval based on pause state
+</Accordion>
+
+<Accordion title="Can I set a custom timer duration?">
+  Not through the UI. The duration is hardcoded in `SetupPage.tsx:19` as `40000` seconds.
+  
+  To add this feature, you could:
+  
+  1. Add a duration input field to the Setup Page:
+  ```tsx
+  const [duration, setDuration] = useState(10800);  // Default 3 hours
+  
+  <input
+    type="number"
+    value={duration}
+    onChange={(e) => setDuration(Number(e.target.value))}
+    placeholder="Duración en segundos"
+  />
+  ```
+  
+  2. Use this value in the configuration:
+  ```typescript
+  const simulationSettings = {
+    area: selectedArea,
+    timerEnabled: timerEnabled,
+    duration: duration,  // Use state value
+    practiceMode: practiceMode,
+  };
+  ```
+</Accordion>
+
+<Accordion title="Why is the warning threshold at 5 minutes?">
+  The 5-minute threshold (`timeLeft < 300`) is hardcoded. This value was chosen because:
+  
+  - It's a common exam warning time
+  - Provides urgency without panic
+  - Enough time to finish 1-2 questions
+  - Standard practice in educational testing
+  
+  You can change this by modifying the condition in `TestPage.tsx:116`:
+  
+  ```tsx
+  timeLeft < 600  // 10-minute warning
+  timeLeft < 180  // 3-minute warning
+  ```
+</Accordion>
+
+<Accordion title="Does the timer sync across page refreshes?">
+  No, refreshing the page will restart the exam and timer. The timer state is not persisted to localStorage or any other storage.
+  
+  To preserve timer state across refreshes, you would need to:
+  1. Store the start time in localStorage
+  2. Calculate elapsed time on mount
+  3. Set `timeLeft` to `duration - elapsed`
+  
+  ```typescript
+  useEffect(() => {
+    const startTime = localStorage.getItem('examStartTime');
+    if (!startTime) {
+      localStorage.setItem('examStartTime', Date.now().toString());
+    } else {
+      const elapsed = Math.floor((Date.now() - Number(startTime)) / 1000);
+      setTimeLeft(config.duration - elapsed);
+    }
+  }, []);
+  ```
+</Accordion>
+
+<Accordion title="Can I add sound alerts?">
+  Yes! You can add audio alerts when the timer reaches certain thresholds:
+  
+  ```typescript
+  useEffect(() => {
+    if (timeLeft === 300) {  // 5 minutes
+      new Audio('/sounds/warning.mp3').play();
+    }
+    if (timeLeft === 60) {   // 1 minute
+      new Audio('/sounds/urgent.mp3').play();
+    }
+  }, [timeLeft]);
+  ```
+  
+  Make sure to include the audio files in your assets directory.
+</Accordion>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Training Schedule" icon="calendar">
+    **Week 1-2**: Timer OFF
+    - Focus on content mastery
+    - Learn without pressure
+    
+    **Week 3-4**: Timer ON (extended duration)
+    - Build time awareness
+    - Practice with 1.5x normal time
+    
+    **Week 5+**: Timer ON (realistic duration)
+    - Full exam simulation
+    - Realistic time constraints
+  </Card>
+  <Card title="Time Management" icon="gauge">
+    **Calculate time per question**
+    - Total time ÷ number of questions
+    - Example: 180 min ÷ 100 questions = 1.8 min/question
+    
+    **Practice pacing**
+    - Aim to finish with 10% time remaining
+    - Skip difficult questions, return later
+    - Don't let one question consume too much time
+  </Card>
+  <Card title="Using Warnings" icon="triangle-exclamation">
+    **When red pulsing starts (5 min left)**:
+    - Finish current question quickly
+    - Answer remaining questions rapidly
+    - Use educated guessing if needed
+    - Don't leave questions blank
+  </Card>
+  <Card title="Analyzing Results" icon="chart-line">
+    **Compare timed vs untimed scores**:
+    - Large difference → work on speed
+    - Similar scores → time management is good
+    - Lower timed score → practice under pressure
+    - Higher timed score → may be overthinking without timer
+  </Card>
+</CardGroup>

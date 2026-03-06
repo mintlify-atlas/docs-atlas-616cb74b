@@ -1,0 +1,518 @@
+---
+title: Building for Production
+description: Build and package EGEL Simulator for distribution across Windows, macOS, and Linux
+---
+
+# Building for Production
+
+This guide covers building EGEL Simulator for production deployment. The build process compiles the React frontend with Vite and packages the Electron app with electron-builder.
+
+## Build Process Overview
+
+The production build consists of two main steps:
+
+<Steps>
+  <Step title="Build the Renderer">
+    Compile the React application with Vite, creating optimized static files
+  </Step>
+  
+  <Step title="Package with Electron Builder">
+    Bundle the Electron app with the built renderer into platform-specific installers
+  </Step>
+</Steps>
+
+## Quick Build
+
+To build for your current platform:
+
+```bash
+npm run build
+```
+
+This runs both build steps sequentially:
+1. `npm run build:renderer` - Compiles React with TypeScript and Vite
+2. `electron-builder` - Packages the Electron app
+
+<Note>
+  The build process requires all dependencies installed. Run `npm run install:all` first if you haven't already.
+</Note>
+
+## Build Scripts
+
+### Available Build Commands
+
+| Command | Script | Description |
+|---------|--------|-------------|
+| `npm run build` | `npm run build:renderer && electron-builder` | Full production build |
+| `npm run build:renderer` | `npm --prefix renderer run build` | Build React app only |
+| `npm run build:main` | `electron-builder` | Package Electron app only |
+
+### Renderer Build Details
+
+The renderer build uses Vite and TypeScript:
+
+```bash
+npm run build:renderer
+```
+
+This command:
+1. Runs TypeScript compiler (`tsc -b`)
+2. Bundles with Vite (`vite build`)
+3. Outputs to `renderer/dist/`
+
+**Build Output**:
+```
+renderer/dist/
+├── index.html          # Entry HTML
+├── assets/
+│   ├── index-[hash].js    # Bundled JavaScript
+│   └── index-[hash].css   # Bundled CSS
+└── ...
+```
+
+<Accordion title="Vite Build Configuration">
+  The Vite build is configured in `renderer/vite.config.ts`:
+  
+  ```typescript renderer/vite.config.ts
+  import { defineConfig } from 'vite'
+  import react from '@vitejs/plugin-react-swc'
+
+  export default defineConfig({
+    plugins: [react()],
+    build: {
+      outDir: 'dist',
+      // Optimizations applied automatically
+    }
+  })
+  ```
+  
+  Vite automatically:
+  - Minifies JavaScript and CSS
+  - Tree-shakes unused code
+  - Splits code into chunks
+  - Generates source maps (configurable)
+</Accordion>
+
+### Electron Builder Configuration
+
+Electron Builder packages the app for distribution. Configuration can be added to `package.json`:
+
+```json package.json
+{
+  "build": {
+    "appId": "com.example.egel-simulator",
+    "productName": "EGEL Simulator",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main/**/*",
+      "renderer/dist/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}
+```
+
+## Platform-Specific Builds
+
+<Tabs>
+  <Tab title="Windows">
+    Build for Windows creates an NSIS installer:
+    
+    ```bash
+    npm run build
+    ```
+    
+    **Output**: `dist/EGEL Simulator Setup [version].exe`
+    
+    **Requirements**:
+    - Windows 10 or later recommended
+    - Builds on Windows, macOS, or Linux (with Wine)
+    
+    **Customization**:
+    ```json package.json
+    {
+      "build": {
+        "win": {
+          "target": ["nsis", "portable"],
+          "icon": "build/icon.ico"
+        }
+      }
+    }
+    ```
+    
+    <Tip>
+      The NSIS installer supports per-user and per-machine installation modes automatically.
+    </Tip>
+  </Tab>
+  
+  <Tab title="macOS">
+    Build for macOS creates a DMG disk image:
+    
+    ```bash
+    npm run build
+    ```
+    
+    **Output**: `dist/EGEL Simulator-[version].dmg`
+    
+    **Requirements**:
+    - Must build on macOS for code signing
+    - Xcode Command Line Tools
+    
+    **Customization**:
+    ```json package.json
+    {
+      "build": {
+        "mac": {
+          "target": ["dmg", "zip"],
+          "icon": "build/icon.icns",
+          "category": "public.app-category.education"
+        }
+      }
+    }
+    ```
+    
+    <Warning>
+      Code signing requires an Apple Developer account and certificates. Without signing, users will see security warnings.
+    </Warning>
+  </Tab>
+  
+  <Tab title="Linux">
+    Build for Linux creates an AppImage:
+    
+    ```bash
+    npm run build
+    ```
+    
+    **Output**: `dist/EGEL Simulator-[version].AppImage`
+    
+    **Requirements**:
+    - Can build on any platform
+    - AppImage works on most distributions
+    
+    **Customization**:
+    ```json package.json
+    {
+      "build": {
+        "linux": {
+          "target": ["AppImage", "deb", "rpm"],
+          "icon": "build/icon.png",
+          "category": "Education"
+        }
+      }
+    }
+    ```
+    
+    <Info>
+      AppImages are portable and don't require installation. Users can download, make executable, and run.
+    </Info>
+  </Tab>
+</Tabs>
+
+## Build Options
+
+### Development Build
+
+For testing production builds locally without full packaging:
+
+```bash
+npm run build:renderer
+npm start
+```
+
+This builds the renderer but runs Electron directly without packaging.
+
+### Clean Build
+
+Remove build artifacts before building:
+
+<CodeGroup>
+```bash Unix (macOS/Linux)
+rm -rf renderer/dist dist
+npm run build
+```
+
+```bash Windows (PowerShell)
+Remove-Item -Recurse -Force renderer/dist, dist
+npm run build
+```
+
+```bash Windows (Command Prompt)
+rmdir /s /q renderer\dist dist
+npm run build
+```
+</CodeGroup>
+
+### Build with Source Maps
+
+Enable source maps for debugging production builds:
+
+```typescript renderer/vite.config.ts
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    sourcemap: true,  // Enable source maps
+  }
+})
+```
+
+<Warning>
+  Source maps expose your source code. Only include them in internal builds, not public releases.
+</Warning>
+
+## Optimizing Build Size
+
+### Analyze Bundle Size
+
+Check what's included in your bundle:
+
+```bash
+cd renderer
+npm run build -- --mode analyze
+```
+
+### Reduce Bundle Size
+
+<AccordionGroup>
+  <Accordion title="Remove Unused Dependencies">
+    Review `package.json` and remove unused packages:
+    
+    ```bash
+    npm uninstall unused-package
+    ```
+  </Accordion>
+  
+  <Accordion title="Optimize Images">
+    Compress images before including them:
+    
+    - Use WebP format for photos
+    - Use SVG for icons and logos
+    - Optimize PNG/JPG with tools like ImageOptim
+  </Accordion>
+  
+  <Accordion title="Code Splitting">
+    Vite automatically splits code, but you can optimize further:
+    
+    ```typescript
+    // Lazy load heavy components
+    const HeavyComponent = lazy(() => import('./HeavyComponent'))
+    ```
+  </Accordion>
+  
+  <Accordion title="Tree Shaking">
+    Import only what you need:
+    
+    ```typescript
+    // Bad - imports entire library
+    import _ from 'lodash'
+    
+    // Good - imports only what's needed
+    import { debounce } from 'lodash-es'
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Electron Builder Advanced
+
+### Multiple Targets
+
+Build for multiple platforms/formats:
+
+```json package.json
+{
+  "build": {
+    "win": {
+      "target": ["nsis", "portable", "zip"]
+    },
+    "mac": {
+      "target": ["dmg", "zip"]
+    },
+    "linux": {
+      "target": ["AppImage", "deb", "rpm"]
+    }
+  }
+}
+```
+
+### Excluding Files
+
+Exclude development files from the build:
+
+```json package.json
+{
+  "build": {
+    "files": [
+      "main/**/*",
+      "renderer/dist/**/*",
+      "!**/*.map",
+      "!**/*.md"
+    ]
+  }
+}
+```
+
+### Auto-Update Configuration
+
+Set up auto-updates (requires hosting):
+
+```json package.json
+{
+  "build": {
+    "publish": {
+      "provider": "github",
+      "owner": "your-username",
+      "repo": "egel-simulator"
+    }
+  }
+}
+```
+
+## Build Artifacts
+
+After a successful build:
+
+```
+dist/
+├── win-unpacked/              # Windows unpacked files
+├── mac/                       # macOS app bundle
+├── linux-unpacked/            # Linux unpacked files
+├── EGEL Simulator Setup.exe   # Windows installer
+├── EGEL Simulator.dmg         # macOS disk image
+└── EGEL Simulator.AppImage    # Linux AppImage
+```
+
+**Distributable Files**:
+- Windows: `.exe` installer
+- macOS: `.dmg` disk image
+- Linux: `.AppImage` executable
+
+<Info>
+  Only distribute the installer/package files (`.exe`, `.dmg`, `.AppImage`). The unpacked folders are used internally by electron-builder.
+</Info>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Build fails with 'Module not found'">
+    Ensure all dependencies are installed:
+    
+    ```bash
+    npm run install:all
+    ```
+    
+    Clear node_modules and reinstall:
+    
+    ```bash
+    rm -rf node_modules renderer/node_modules
+    npm run install:all
+    ```
+  </Accordion>
+  
+  <Accordion title="electron-builder fails with 'Cannot find module'">
+    The main process file path must be correct in `package.json`:
+    
+    ```json
+    {
+      "main": "main/main.js"
+    }
+    ```
+    
+    Ensure `main/main.js` exists and the renderer is built in `renderer/dist/`.
+  </Accordion>
+  
+  <Accordion title="Build succeeds but app crashes on launch">
+    Common causes:
+    
+    1. **Missing environment variables**: `.env` is not included in builds. Use environment-specific config.
+    2. **Database path issues**: Ensure `app.getPath('userData')` is used.
+    3. **Missing native modules**: Rebuild native modules for Electron:
+    
+    ```bash
+    npx electron-rebuild
+    ```
+  </Accordion>
+  
+  <Accordion title="macOS build fails with code signing errors">
+    Disable code signing for local builds:
+    
+    ```bash
+    CSC_IDENTITY_AUTO_DISCOVERY=false npm run build
+    ```
+    
+    Or configure in `package.json`:
+    
+    ```json
+    {
+      "build": {
+        "mac": {
+          "identity": null
+        }
+      }
+    }
+    ```
+    
+    <Warning>
+      Apps without code signing will show security warnings on macOS.
+    </Warning>
+  </Accordion>
+</AccordionGroup>
+
+## CI/CD Integration
+
+### GitHub Actions Example
+
+```yaml .github/workflows/build.yml
+name: Build
+on: [push]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies
+        run: npm run install:all
+      
+      - name: Build
+        run: npm run build
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist-${{ matrix.os }}
+          path: dist/
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Development Setup" icon="code" href="/development/setup">
+    Set up your development environment
+  </Card>
+  <Card title="Project Structure" icon="folder-tree" href="/development/project-structure">
+    Understand the codebase organization
+  </Card>
+  <Card title="Distribution" icon="box" href="https://www.electron.build/">
+    Learn about distributing Electron apps
+  </Card>
+  <Card title="Code Signing" icon="certificate" href="https://www.electron.build/code-signing">
+    Set up code signing for production
+  </Card>
+</CardGroup>

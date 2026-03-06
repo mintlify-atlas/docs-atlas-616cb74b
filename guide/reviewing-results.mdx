@@ -1,0 +1,533 @@
+---
+title: Reviewing Results
+description: Complete guide to accessing exam history and analyzing your performance
+---
+
+After completing an exam, EGEL Simulator automatically saves your results to a persistent history log. The HistoryPage provides comprehensive insights into your performance, allowing you to track progress and identify areas for improvement.
+
+## Accessing Your History
+
+There are two ways to access the HistoryPage:
+
+<Steps>
+  <Step title="Automatic Redirect After Exam">
+    When you complete an exam by clicking **"Finalizar"** on the last question, the application:
+    
+    1. Calculates your final score
+    2. Creates a history entry
+    3. Automatically navigates to `/history`
+    
+    ```typescript
+    // From TestPage.tsx:73
+    navigate("/history");
+    ```
+  </Step>
+
+  <Step title="Manual Navigation from Home">
+    You can also access your history at any time by:
+    
+    - Navigating to the home page
+    - Clicking the history or results button
+    - Being routed to `/history`
+    
+    From the HistoryPage, click **"← Volver"** to return home:
+    
+    ```typescript
+    // Back button from HistoryPage.tsx:28-30
+    <button onClick={() => navigate('/home')}>
+        <ArrowLeft className="h-5 w-5 mr-1" /> Volver
+    </button>
+    ```
+  </Step>
+</Steps>
+
+## Understanding the History Interface
+
+### Page Header
+
+The HistoryPage features a prominent header with:
+
+- **Icon**: Clipboard icon in a gradient green background
+- **Title**: "Historial de Simulacros"
+- **Subtitle**: "Consulta tu desempeño en intentos anteriores"
+
+```typescript
+// Header from HistoryPage.tsx:32-38
+<div className="flex flex-col items-center text-center space-y-4">
+    <div className="bg-gradient-to-r from-green-100 to-emerald-200 rounded-full p-4">
+        <ClipboardList className="h-10 w-10 text-green-700" />
+    </div>
+    <h2 className="text-3xl font-bold text-gray-800">Historial de Simulacros</h2>
+    <p className="text-gray-500 text-sm">Consulta tu desempeño en intentos anteriores.</p>
+</div>
+```
+
+### Summary Statistics
+
+The page displays aggregate statistics across four cards:
+
+<CardGroup cols={4}>
+  <Card title="Total" icon="chart-bar" color="blue">
+    Total number of exams completed
+  </Card>
+  <Card title="Disciplinar" icon="book" color="pink">
+    Count of disciplinar-area exams
+  </Card>
+  <Card title="Transversal" icon="arrows-cross" color="yellow">
+    Count of transversal-area exams
+  </Card>
+  <Card title="Ambas Áreas" icon="books" color="purple">
+    Count of comprehensive exams (both areas)
+  </Card>
+</CardGroup>
+
+```typescript
+// Statistics calculation from HistoryPage.tsx:9-23
+const totals = history.reduce(
+    (acc, cur) => {
+        if (cur.type in acc) {
+            acc[cur.type as SimulationType]++;
+        }
+        acc.total++;
+        return acc;
+    },
+    {
+        disciplinar: 0,
+        transversal: 0,
+        ambas: 0,
+        total: 0,
+    } as Record<SimulationType | "total", number>
+);
+```
+
+Each statistics card displays:
+- **Category name** (Total, Disciplinar, etc.)
+- **Count** in bold, colored text
+- **Color-coded background** matching the category
+
+```typescript
+// Example card from HistoryPage.tsx:41-44
+<div className="bg-blue-50 rounded-xl p-5 shadow">
+    <p className="font-bold text-gray-500">Total</p>
+    <p className="text-lg font-bold text-blue-700">{totals.total}</p>
+</div>
+```
+
+## History Entry Details
+
+Each exam attempt is displayed as a card containing:
+
+### Entry Structure
+
+The `HistoryItem` interface defines what data is tracked:
+
+```typescript
+// From useHistoryStore.tsx:4-14
+export interface HistoryItem {
+    id: string;                    // Unique identifier (UUID)
+    date: string;                  // Date in locale format
+    time: string;                  // Time in locale format
+    score: number;                 // Percentage score (0-100)
+    correct: number;               // Number of correct answers
+    total: number;                 // Total questions
+    type: SimulationType;          // Area: disciplinar, transversal, ambas
+    timerEnabled?: boolean;        // Whether timer was used
+    practiceMode?: boolean;        // Whether practice mode was enabled
+}
+```
+
+### Visual Presentation
+
+Each history entry card shows:
+
+1. **Green checkmark icon** indicating completion
+2. **Exam type** (capitalized): Disciplinar, Transversal, or Ambas
+3. **Date and time** of completion
+4. **Configuration badges**:
+   - Practice mode indicator ("Práctica" or "Simulacro")
+   - Timer status ("Cronometrado" or "Sin cronómetro")
+5. **Correct answers**: "X aciertos de Y"
+6. **Score percentage**: Large, bold display
+
+```typescript
+// Entry card from HistoryPage.tsx:60-92
+<div className="flex justify-between items-center p-4 bg-white border rounded-xl shadow">
+    <div className="flex items-center space-x-4">
+        <CheckCircle className="text-green-600 w-6 h-6" />
+        <div>
+            <p className="text-base font-medium text-gray-800">
+                <span className="font-bold italic">
+                    {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
+                </span>
+                &nbsp;&nbsp;~&nbsp;&nbsp; {item.date} &nbsp;&nbsp; {item.time}
+            </p>
+            
+            <div className="flex flex-wrap text-sm text-gray-600 gap-2">
+                <span className="flex items-center gap-1 bg-green-50 px-2 py-1 rounded-full">
+                    <PlayCircle className="w-4 h-4" />
+                    {item.practiceMode ? "Práctica" : "Simulacro"}
+                </span>
+                <span className="flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-full">
+                    <Timer className="w-4 h-4" />
+                    {item.timerEnabled ? "Cronometrado" : "Sin cronómetro"}
+                </span>
+            </div>
+            
+            <p className="text-sm text-green-700 mt-1">
+                {item.correct} aciertos de {item.total}
+            </p>
+        </div>
+    </div>
+    <div className="text-right">
+        <p className="text-xl font-bold text-blue-800">{item.score}%</p>
+        <p className="text-xs text-gray-400">Calificación</p>
+    </div>
+</div>
+```
+
+## Understanding Score Calculations
+
+Scores are calculated when you complete an exam:
+
+### Score Computation
+
+```typescript
+// From TestPage.tsx:53-57
+const total = examQuestions.length
+const correct = Math.floor(total * 0.7)  // Example: placeholder logic
+const score = Math.round((correct / total) * 100)
+```
+
+<Note>
+The current implementation uses a placeholder calculation (70% correct). In a production environment, this would compare your selected answers against `question.correctAnswerIndex` for each question.
+</Note>
+
+### Real Score Calculation Example
+
+For actual score tracking, the logic would be:
+
+```typescript
+// Pseudo-code for real scoring
+const correct = examQuestions.reduce((count, question) => {
+    const userAnswer = selectedAnswers[question.id];
+    const isCorrect = userAnswer === question.correctAnswerIndex;
+    return count + (isCorrect ? 1 : 0);
+}, 0);
+
+const score = Math.round((correct / total) * 100);
+```
+
+### Score Display
+
+Scores are shown as:
+- **Percentage**: 0-100%
+- **Correct count**: "X aciertos de Y"
+- **Large, bold text** in blue for emphasis
+
+## History Entry Creation
+
+Entries are created automatically when you finish an exam:
+
+```typescript
+// Entry creation from TestPage.tsx:58-71
+const now = new Date();
+const date = now.toLocaleDateString()
+const time = now.toLocaleTimeString()
+
+addHistoryEntry({
+    date,
+    time,
+    score,
+    correct,
+    total,
+    type: config!.area,
+    timerEnabled: config!.timerEnabled,
+    practiceMode: config!.practiceMode,
+});
+```
+
+The `addHistoryEntry` function:
+1. Generates a unique UUID for the entry
+2. Prepends the new entry to the history array (newest first)
+3. Persists the updated history to localStorage
+
+```typescript
+// From useHistoryStore.tsx:26-31
+addEntry: (entry) => {
+    const newEntry: HistoryItem = {
+        id: crypto.randomUUID(),
+        ...entry,
+    };
+    set({ history: [newEntry, ...get().history] });
+}
+```
+
+## Persistent Storage
+
+History is saved using Zustand's persist middleware:
+
+```typescript
+// Store definition from useHistoryStore.tsx:22-38
+export const useHistoryStore = create<HistoryState>()()
+    persist(
+        (set, get) => ({
+            history: [],
+            addEntry: (entry) => {
+                const newEntry: HistoryItem = {
+                    id: crypto.randomUUID(),
+                    ...entry,
+                };
+                set({ history: [newEntry, ...get().history] });
+            },
+            clearHistory: () => set({ history: [] }),
+        }),
+        {
+            name: 'sim-history-store',  // localStorage key
+        }
+    )
+);
+```
+
+This means:
+- History persists across application restarts
+- Data is stored in localStorage as `sim-history-store`
+- No external database required for history
+- Works offline
+
+<Tip>
+Your exam history is stored locally on your device. If you reinstall the application or clear browser data, your history will be lost. Back up important data if needed.
+</Tip>
+
+## Identifying Areas for Improvement
+
+### Analyzing Trends
+
+By reviewing your history, you can identify patterns:
+
+<Tabs>
+  <Tab title="Score Progression">
+    **Track improvement over time:**
+    
+    - Compare scores from earliest to latest attempts
+    - Look for upward trends indicating learning
+    - Identify plateaus where additional study is needed
+    
+    Example analysis:
+    ```
+    Attempt 1: 65% (Ambas, Simulacro)
+    Attempt 2: 70% (Disciplinar, Práctica)
+    Attempt 3: 75% (Ambas, Simulacro)
+    Attempt 4: 80% (Ambas, Simulacro)
+    ```
+    
+    **Insight**: Steady 5% improvement shows effective learning.
+  </Tab>
+
+  <Tab title="Area-Specific Performance">
+    **Compare scores by study area:**
+    
+    - Review disciplinar vs transversal scores
+    - Identify which area needs more focus
+    - Target weak areas with focused practice
+    
+    Example analysis:
+    ```
+    Disciplinar average: 75%
+    Transversal average: 85%
+    Ambas average: 78%
+    ```
+    
+    **Insight**: Focus more study time on disciplinar content.
+  </Tab>
+
+  <Tab title="Practice vs Simulation">
+    **Compare learning modes:**
+    
+    - Practice mode scores (with feedback)
+    - Simulation mode scores (without feedback)
+    - Gap between modes indicates retention issues
+    
+    Example analysis:
+    ```
+    Practice mode average: 82%
+    Simulation mode average: 75%
+    ```
+    
+    **Insight**: 7% gap suggests difficulty recalling information without immediate feedback. Work on retention strategies.
+  </Tab>
+
+  <Tab title="Timer Impact">
+    **Assess time pressure effects:**
+    
+    - Compare timed vs untimed exam scores
+    - Identify time management challenges
+    - Practice with timer to build speed
+    
+    Example analysis:
+    ```
+    With timer: 73%
+    Without timer: 85%
+    ```
+    
+    **Insight**: 12% drop with timer indicates need for time management practice.
+  </Tab>
+</Tabs>
+
+### Setting Performance Goals
+
+Use your history to establish targets:
+
+1. **Baseline Score**: Your first or average score
+2. **Target Score**: Desired exam performance (e.g., 85%+)
+3. **Improvement Rate**: Track progress toward target
+4. **Practice Plan**: Adjust study based on weak areas
+
+## Empty State
+
+If you haven't completed any exams yet:
+
+```typescript
+// Empty state from HistoryPage.tsx:94-96
+{history.length === 0 && (
+    <p className="text-center text-gray-400 mt-6 italic">
+        Aún no has realizado simulacros.
+    </p>
+)}
+```
+
+The page displays:
+- All statistics showing **0**
+- Italicized message: "Aún no has realizado simulacros."
+- Clean interface encouraging you to start your first exam
+
+## Data Tracked Per Entry
+
+Each history entry captures comprehensive metadata:
+
+| Field | Type | Example | Purpose |
+|-------|------|---------|----------|
+| `id` | `string` | `"550e8400-e29b..."` | Unique identifier |
+| `date` | `string` | `"3/6/2026"` | Date of completion |
+| `time` | `string` | `"14:23:15"` | Time of completion |
+| `score` | `number` | `85` | Percentage score |
+| `correct` | `number` | `102` | Correct answers |
+| `total` | `number` | `120` | Total questions |
+| `type` | `SimulationType` | `"ambas"` | Study area selected |
+| `timerEnabled` | `boolean` | `true` | Timer was active |
+| `practiceMode` | `boolean` | `false` | Practice mode status |
+
+### Date and Time Formatting
+
+Dates and times use browser locale formatting:
+
+```typescript
+// From TestPage.tsx:58-60
+const now = new Date();
+const date = now.toLocaleDateString()  // e.g., "3/6/2026"
+const time = now.toLocaleTimeString()  // e.g., "2:30:45 PM"
+```
+
+This ensures:
+- Dates match user's system locale
+- Times display in 12-hour or 24-hour format based on locale
+- Automatic timezone handling
+
+## Clearing History
+
+While not exposed in the UI, the store provides a clear function:
+
+```typescript
+// From useHistoryStore.tsx:33
+clearHistory: () => set({ history: [] })
+```
+
+This could be called programmatically or added to the UI:
+
+```typescript
+// Example usage
+const { clearHistory } = useHistoryStore();
+
+// Clear all history
+clearHistory();
+```
+
+<Warning>
+Clearing history is permanent and cannot be undone. All exam records will be permanently deleted from localStorage.
+</Warning>
+
+## Mobile Responsive Design
+
+The HistoryPage adapts to different screen sizes:
+
+```typescript
+// Responsive grid from HistoryPage.tsx:40
+<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+```
+
+- **Mobile**: 2 columns (Total + Disciplinar on top row)
+- **Desktop**: 4 columns (all statistics in one row)
+
+Entry cards also stack on mobile:
+
+```typescript
+// From HistoryPage.tsx:61
+<div className="flex flex-col sm:flex-row justify-between items-center">
+```
+
+## Best Practices for Using History
+
+1. **Review After Each Exam**: Check your score immediately
+2. **Compare Attempts**: Look at trends over multiple exams
+3. **Focus Weak Areas**: Use statistics to identify problem domains
+4. **Track Progress**: Celebrate improvements and identify plateaus
+5. **Adjust Strategy**: Change study methods based on results
+6. **Set Benchmarks**: Establish score goals and track progress
+7. **Consider Context**: Account for mode, timer, and area differences
+8. **Regular Practice**: More history entries provide better insights
+9. **Identify Patterns**: Notice when you perform best
+10. **Stay Motivated**: Use progress visualization to maintain momentum
+
+## Technical Implementation Notes
+
+### History Rendering
+
+Entries are rendered in reverse chronological order (newest first):
+
+```typescript
+// From HistoryPage.tsx:59-92
+{history.map((item) => (
+    <div key={item.id}>
+        {/* Entry card */}
+    </div>
+))}
+```
+
+The `map` iterates over the history array, which has new entries prepended:
+
+```typescript
+// From useHistoryStore.tsx:31
+set({ history: [newEntry, ...get().history] });
+```
+
+### Badge Icons
+
+Configuration badges use Lucide icons:
+
+- **PlayCircle**: Indicates practice vs simulation mode
+- **Timer**: Shows whether timer was enabled
+- **CheckCircle**: Marks completed exams
+
+```typescript
+// Icons from HistoryPage.tsx:1
+import { ClipboardList, ArrowLeft, CheckCircle, Timer, PlayCircle } from "lucide-react";
+```
+
+### Persistent State Sync
+
+Zustand's persist middleware automatically:
+- Saves to localStorage on state changes
+- Loads from localStorage on app initialization
+- Handles serialization/deserialization
+- Maintains consistency across sessions
+
+No manual save/load logic required!

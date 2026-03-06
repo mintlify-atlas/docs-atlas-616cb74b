@@ -1,0 +1,468 @@
+---
+title: Configuring Tests
+description: Complete guide to configuring EGEL exam simulations and practice sessions
+---
+
+The SetupPage allows you to customize your exam experience by selecting the study area, exam mode, and timer preferences. Understanding these configuration options helps you tailor your practice to match your learning goals.
+
+## Configuration Options Overview
+
+<CardGroup cols={2}>
+  <Card title="Study Area" icon="book">
+    Choose between disciplinar, transversal, or both areas
+  </Card>
+  <Card title="Practice Mode" icon="graduation-cap">
+    Enable immediate feedback after each answer
+  </Card>
+  <Card title="Timer" icon="clock">
+    Optional countdown timer for exam simulation
+  </Card>
+  <Card title="Duration" icon="hourglass">
+    Fixed at 40,000 seconds (configurable in code)
+  </Card>
+</CardGroup>
+
+## Accessing the Setup Page
+
+After successful license activation, navigate to the setup page by:
+
+1. Clicking **"Iniciar simulacro"** from the home page
+2. Being automatically routed to `/setup`
+3. Seeing the configuration interface with all available options
+
+```typescript
+// Navigation from SetupPage.tsx:7
+const navigate = useNavigate();
+
+// Return to home
+navigate('/home');
+
+// Start test after configuration
+navigate('/test');
+```
+
+## Study Area Selection
+
+### Available Areas
+
+The EGEL exam is divided into distinct knowledge domains:
+
+<Tabs>
+  <Tab title="Disciplinar">
+    **Disciplinar** questions focus on subject-specific knowledge related to your field of study.
+    
+    Select this when you want to:
+    - Practice domain-specific concepts
+    - Review technical material from your discipline
+    - Prepare for the specialized portion of the exam
+    
+    ```typescript
+    // From SetupPage.tsx:11
+    const [selectedArea, setSelectedArea] = useState<SimulationType>("ambas");
+    
+    // User selects "disciplinar"
+    setSelectedArea("disciplinar");
+    ```
+  </Tab>
+
+  <Tab title="Transversal">
+    **Transversal** questions test general competencies that apply across disciplines.
+    
+    Select this when you want to:
+    - Practice critical thinking and analysis
+    - Review general professional skills
+    - Work on cross-cutting competencies
+    
+    Transversal areas typically include:
+    - Logical reasoning
+    - Reading comprehension
+    - Problem-solving
+    - Ethical decision-making
+  </Tab>
+
+  <Tab title="Ambas Áreas">
+    **Ambas** (Both) combines questions from both disciplinar and transversal areas.
+    
+    This is the **default** setting and most closely simulates the actual EGEL exam experience.
+    
+    Select this when you want to:
+    - Take a comprehensive practice exam
+    - Simulate the real exam experience
+    - Practice time management across both areas
+    
+    ```typescript
+    // Default configuration from SetupPage.tsx:11
+    const [selectedArea, setSelectedArea] = useState<SimulationType>("ambas");
+    ```
+  </Tab>
+</Tabs>
+
+### UI Implementation
+
+The area selection uses radio buttons for mutually exclusive choices:
+
+```typescript
+// Radio button implementation from SetupPage.tsx:48-62
+{["disciplinar", "transversal", "ambas"].map((value) => (
+    <label key={value} className="flex items-center space-x-3">
+        <input
+            type="radio"
+            name="area"
+            value={value}
+            checked={selectedArea === value}
+            onChange={() => setSelectedArea(value as SimulationType)}
+            className="w-5 h-5 accent-green-600"
+        />
+        <span className="text-base capitalize">
+            {value === "ambas" ? "ambas áreas" : value.charAt(0).toUpperCase() + value.slice(1)}
+        </span>
+    </label>
+))}
+```
+
+## Practice Mode vs Simulation Mode
+
+### Practice Mode
+
+<Note>
+Practice mode provides **immediate feedback** after each answer, showing you the correct answer before moving to the next question.
+</Note>
+
+When practice mode is **enabled**:
+- You select an answer
+- Feedback appears immediately showing the correct answer
+- You can learn from mistakes in real-time
+- Ideal for studying and reviewing material
+
+```typescript
+// From SetupPage.tsx:13
+const [practiceMode, setPracticeMode] = useState(false);
+
+// Toggle practice mode
+<input
+    id="practice-mode"
+    type="checkbox"
+    checked={practiceMode}
+    onChange={() => setPracticeMode(!practiceMode)}
+    className="form-checkbox w-5 h-5 text-green-600"
+/>
+```
+
+Practice mode displays feedback through the Question component:
+
+```typescript
+// From Question.tsx:59-66
+{showFeedback && mode === "practica" && (
+    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-sm">
+        <strong>Respuesta correcta:</strong>{" "}
+        <span className="font-medium">
+            {String.fromCharCode(65 + question.correctAnswerIndex)}. {question.options[question.correctAnswerIndex]}
+        </span>
+    </div>
+)}
+```
+
+### Simulation Mode
+
+When practice mode is **disabled** (simulation mode):
+- You can select and change answers freely
+- No feedback is provided during the exam
+- Results are shown only at the end via the HistoryPage
+- Mimics the actual EGEL exam experience
+
+<Warning>
+In simulation mode, you won't see the correct answers until the exam is complete. This tests your knowledge under exam-like conditions.
+</Warning>
+
+```typescript
+// Multiple selection allowed in simulation mode
+// From Question.tsx:38-40
+if (!allowMultipleSelection && selectedAnswer !== undefined) return;
+onSelect(index);
+```
+
+## Timer Configuration
+
+### Enabling/Disabling the Timer
+
+The timer is **enabled by default** but can be toggled:
+
+```typescript
+// From SetupPage.tsx:12
+const [timerEnabled, setTimerEnabled] = useState(true);
+
+// Timer checkbox from SetupPage.tsx:89-96
+<input
+    id="enable-timer"
+    type="checkbox"
+    checked={timerEnabled}
+    onChange={() => setTimerEnabled(!timerEnabled)}
+    className="form-checkbox w-4 h-4 text-green-600"
+/>
+```
+
+<Tip>
+The timer checkbox is positioned in the bottom-right corner of the setup interface, separate from other configuration options.
+</Tip>
+
+### Timer Duration
+
+The exam duration is currently **hardcoded to 40,000 seconds** (approximately 11 hours):
+
+```typescript
+// From SetupPage.tsx:16-21
+const handleClick = () => {
+    const simulationSettings = {
+        area: selectedArea,
+        timerEnabled: timerEnabled,
+        duration: 40000,  // Fixed duration in seconds
+        practiceMode: practiceMode,
+    };
+    setConfig(simulationSettings);
+};
+```
+
+<Note>
+While 40,000 seconds seems long, this value can be adjusted in the source code if you need a different duration for your practice sessions.
+</Note>
+
+### How the Timer Works During Exams
+
+Once the exam starts, the timer counts down from the configured duration:
+
+```typescript
+// Timer implementation from TestPage.tsx:29-39
+useEffect(() => {
+    if (!config?.timerEnabled) return
+    const interval = setInterval(() => {
+        setTimeLeft((prev) => {
+            if (prev <= 1) clearInterval(interval)
+            return prev - 1
+        })
+    }, 1000)
+    return () => clearInterval(interval)
+}, [config])
+```
+
+The timer displays:
+- In `MM:SS` format
+- With a clock icon
+- Turns red and pulses when less than 5 minutes remain (300 seconds)
+
+```typescript
+// Time formatting from TestPage.tsx:80-84
+const formatTime = (seconds: number) => {
+    const min = Math.floor(seconds / 60)
+    const sec = seconds % 60
+    return `${min}:${sec.toString().padStart(2, "0")}`
+}
+```
+
+## Configuration State Management
+
+All configuration is stored in Zustand's `useSetupStore`:
+
+```typescript
+// Store definition from useSetupStore.tsx:3-14
+type SimulationSettings = {
+  area: SimulationType;
+  timerEnabled: boolean;
+  duration: number;
+  practiceMode: boolean;
+};
+
+type SetupStore = {
+  config: SimulationSettings | null;
+  setConfig: (config: SimulationSettings) => void;
+  resetConfig: () => void;
+};
+```
+
+When you click **"Iniciar simulacro"**, the configuration is saved:
+
+```typescript
+// From SetupPage.tsx:16-25
+const handleClick = () => {
+    const simulationSettings = {
+        area: selectedArea,
+        timerEnabled: timerEnabled,
+        duration: 40000,
+        practiceMode: practiceMode,
+    };
+    setConfig(simulationSettings);  // Store configuration
+    
+    navigate("/test");  // Navigate to exam
+};
+```
+
+## Complete Configuration Scenarios
+
+<Tabs>
+  <Tab title="Quick Practice">
+    **Recommended for learning new material:**
+    
+    - **Area**: Disciplinar or Transversal (focus on one)
+    - **Practice Mode**: ✅ Enabled
+    - **Timer**: ❌ Disabled
+    
+    This configuration lets you:
+    - Focus on specific content areas
+    - Get immediate feedback on each question
+    - Learn without time pressure
+    - Review correct answers before moving on
+    
+    ```typescript
+    {
+      area: "disciplinar",
+      practiceMode: true,
+      timerEnabled: false,
+      duration: 40000
+    }
+    ```
+  </Tab>
+
+  <Tab title="Exam Simulation">
+    **Recommended for final preparation:**
+    
+    - **Area**: Ambas (both areas)
+    - **Practice Mode**: ❌ Disabled
+    - **Timer**: ✅ Enabled
+    
+    This configuration:
+    - Replicates actual exam conditions
+    - Tests time management skills
+    - Provides comprehensive coverage
+    - Shows results only at the end
+    
+    ```typescript
+    {
+      area: "ambas",
+      practiceMode: false,
+      timerEnabled: true,
+      duration: 40000
+    }
+    ```
+  </Tab>
+
+  <Tab title="Focused Review">
+    **Recommended for reviewing specific weak areas:**
+    
+    - **Area**: Choose your weak area
+    - **Practice Mode**: ✅ Enabled
+    - **Timer**: ✅ Enabled (for mild pressure)
+    
+    This configuration:
+    - Targets specific knowledge gaps
+    - Provides learning feedback
+    - Adds light time pressure
+    - Balances learning and simulation
+    
+    ```typescript
+    {
+      area: "transversal",
+      practiceMode: true,
+      timerEnabled: true,
+      duration: 40000
+    }
+    ```
+  </Tab>
+
+  <Tab title="Endurance Training">
+    **Recommended for building stamina:**
+    
+    - **Area**: Ambas (both areas)
+    - **Practice Mode**: ❌ Disabled
+    - **Timer**: ❌ Disabled
+    
+    This configuration:
+    - Allows extended practice sessions
+    - No time constraints
+    - Full exam coverage
+    - Tests knowledge retention
+    
+    ```typescript
+    {
+      area: "ambas",
+      practiceMode: false,
+      timerEnabled: false,
+      duration: 40000
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## UI Layout and Navigation
+
+The SetupPage features:
+
+### Header Navigation
+
+```typescript
+// Back button from SetupPage.tsx:33-35
+<button onClick={() => navigate('/home')} className="cursor-pointer flex items-center">
+    <ArrowLeft className="h-5 w-5 mr-1" /> Volver
+</button>
+```
+
+### Main Configuration Grid
+
+The configuration options are laid out in a two-column grid:
+
+```typescript
+// Grid layout from SetupPage.tsx:42
+<div className="grid grid-cols-2 gap-16">
+    {/* Left column: Area selection (radio buttons) */}
+    {/* Right column: Practice mode (checkbox) */}
+</div>
+```
+
+### Start Button
+
+The prominent green **"Iniciar simulacro"** button:
+- Uses Play icon from Lucide
+- Full width of the container
+- Hover effects with translation and shadow
+- Triggers configuration save and navigation
+
+```typescript
+// From SetupPage.tsx:101-107
+<button
+    onClick={handleClick}
+    className="mt-10 w-full bg-green-600 text-white py-4 rounded-xl hover:bg-green-700"
+>
+    <Play className="h-5 w-5" />
+    <span>Iniciar simulacro</span>
+</button>
+```
+
+## Configuration Validation
+
+The TestPage validates configuration on load:
+
+```typescript
+// Configuration check from TestPage.tsx:23-27
+useEffect(() => {
+    if (!config) {
+        navigate("/setup");  // Redirect if no config
+    }
+}, [config, navigate])
+```
+
+If you navigate directly to `/test` without configuring:
+- You'll be automatically redirected to `/setup`
+- Must complete configuration before starting
+- Prevents undefined behavior during exam
+
+<Warning>
+Direct navigation to the test page is blocked without proper configuration. Always start from the SetupPage.
+</Warning>
+
+## Best Practices
+
+1. **Start with Practice Mode** when learning new material
+2. **Use Simulation Mode** for final exam preparation
+3. **Enable Timer** to build time management skills
+4. **Practice Both Areas** to prepare comprehensively
+5. **Focus Study** on one area when reviewing specific topics
+6. **Disable Timer** when you want to thoroughly understand concepts
+7. **Track Progress** by reviewing your history after each session

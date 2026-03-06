@@ -1,0 +1,695 @@
+---
+title: 'Customization Guide'
+description: 'Customize question banks, UI themes, timer durations, and scoring logic in EGEL Simulator'
+icon: 'palette'
+---
+
+EGEL Simulator is designed to be customizable. This guide shows how to modify questions, adjust UI styling, change exam parameters, and extend functionality.
+
+## Modifying Question Banks
+
+### Question File Structure
+
+**Location:** `renderer/src/features/EGEL/services/questions.ts`
+
+All exam questions are stored in a TypeScript array, bundled with the renderer code.
+
+### Question Schema
+
+```typescript renderer/src/features/EGEL/services/questions.ts:1-14
+const questions: EGELQuestion[] = [
+    {
+        id: "q1",
+        question: "¿Cuál de las siguientes opciones **describe correctamente** el uso del operador lógico `&&` en JavaScript?",
+        options: [
+            "`&&` evalúa ambas expresiones y retorna `true` si al menos una es verdadera.",
+            "`&&` detiene la evaluación si la primera expresión es verdadera.",
+            "`&&` evalúa de izquierda a derecha y retorna el **primer valor falso** o el último valor si todos son verdaderos.",
+            "`&&` siempre retorna un valor booleano.",
+        ],
+        correctAnswerIndex: 2,  // Zero-indexed
+        block: "disciplinary",
+        subtopic: "operadores lógicos",
+    },
+];
+```
+
+### Question Type Definition
+
+```typescript
+interface EGELQuestion {
+    id: string;                  // Unique identifier
+    question: string;            // Question text (supports Markdown)
+    options: string[];           // Array of answer choices
+    correctAnswerIndex: number;  // Index of correct answer (0-based)
+    block: "disciplinary" | "transversal";  // Question category
+    subtopic?: string;           // Optional subtopic tag
+}
+```
+
+<Info>
+  The `question` and `options` fields support **Markdown syntax**, including code blocks, bold text, and inline code.
+</Info>
+
+### Adding New Questions
+
+1. Open `renderer/src/features/EGEL/services/questions.ts`
+2. Add a new object to the `questions` array:
+
+```typescript
+const questions: EGELQuestion[] = [
+    // Existing questions...
+    {
+        id: "q5",
+        question: "¿Cuál es la complejidad temporal de la búsqueda binaria?",
+        options: [
+            "O(n)",
+            "O(log n)",
+            "O(n log n)",
+            "O(n²)",
+        ],
+        correctAnswerIndex: 1,
+        block: "disciplinary",
+        subtopic: "algoritmos",
+    },
+];
+```
+
+3. Rebuild the renderer:
+
+```bash
+cd renderer
+npm run build
+```
+
+<Warning>
+  **Question IDs must be unique.** Duplicate IDs may cause unpredictable behavior in the test engine.
+</Warning>
+
+### Question Filtering
+
+```typescript renderer/src/features/EGEL/services/questions.ts:53-66
+const typeMap = {
+    disciplinar: "disciplinary",
+    transversal: "transversal",
+    ambas: "ambas",
+} as const;
+
+type QuestionType = keyof typeof typeMap;
+
+export function getQuestions(type: QuestionType = "ambas"): EGELQuestion[] {
+    if (type === "ambas") return questions;
+
+    const mappedType = typeMap[type];
+    return questions.filter(q => q.block === mappedType);
+}
+```
+
+The `getQuestions()` function filters questions by type:
+- `"disciplinar"` returns only `block: "disciplinary"`
+- `"transversal"` returns only `block: "transversal"`
+- `"ambas"` returns all questions
+
+### Bulk Question Import
+
+To import questions from JSON or CSV:
+
+```typescript
+// Create a script in renderer/scripts/import-questions.ts
+import fs from 'fs';
+
+const jsonData = JSON.parse(fs.readFileSync('questions.json', 'utf-8'));
+
+const formatted = jsonData.map((q, index) => ({
+    id: `q${index + 1}`,
+    question: q.question,
+    options: q.options,
+    correctAnswerIndex: q.correct,
+    block: q.type === 'disciplinary' ? 'disciplinary' : 'transversal',
+    subtopic: q.subtopic || undefined,
+}));
+
+console.log(JSON.stringify(formatted, null, 2));
+```
+
+Run with:
+
+```bash
+cd renderer
+npx tsx scripts/import-questions.ts > output.json
+```
+
+Then paste the output into `questions.ts`.
+
+## Customizing UI Themes
+
+### Tailwind CSS Configuration
+
+The renderer uses **Tailwind CSS v4** via the Vite plugin:
+
+```typescript renderer/vite.config.ts:6-10
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(),
+  ],
+})
+```
+
+<Note>
+  Tailwind v4 uses **native CSS** configuration instead of `tailwind.config.js`. All customization happens via CSS variables.
+</Note>
+
+### Customizing Colors
+
+**Approach 1: Global CSS Variables**
+
+Edit `renderer/src/index.css` (or wherever global styles are defined):
+
+```css
+@import "tailwindcss";
+
+@theme {
+  --color-primary-500: #3b82f6;  /* Blue */
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  
+  --color-success-500: #10b981;  /* Green */
+  --color-danger-500: #ef4444;   /* Red */
+}
+```
+
+Usage in components:
+
+```tsx
+<button className="bg-primary-500 text-white hover:bg-primary-600">
+  Start Test
+</button>
+```
+
+**Approach 2: Inline Styles**
+
+For one-off customizations, use Tailwind's arbitrary values:
+
+```tsx
+<div className="bg-[#1e293b] text-[#f1f5f9]">
+  Custom dark theme
+</div>
+```
+
+### Dark Mode Support
+
+Add dark mode variants:
+
+```css
+@theme {
+  --color-background: #ffffff;
+  
+  @media (prefers-color-scheme: dark) {
+    --color-background: #0f172a;
+  }
+}
+```
+
+Usage:
+
+```tsx
+<div className="bg-background">
+  Automatically adapts to system theme
+</div>
+```
+
+### Styling the Test Page
+
+The main test UI is likely in `renderer/src/pages/TestPage.tsx`. Common customizations:
+
+```tsx
+// Change timer color
+<div className="text-red-500 font-bold">  {/* Change to text-orange-500 */}
+  {timeRemaining}
+</div>
+
+// Adjust question card styling
+<div className="bg-white rounded-lg shadow-md p-6">  {/* Add border-l-4 border-blue-500 */}
+  {question.question}
+</div>
+
+// Customize button appearance
+<button className="bg-blue-500 hover:bg-blue-600">  {/* Change to bg-gradient-to-r from-blue-500 to-purple-500 */}
+  Submit
+</button>
+```
+
+## Adjusting Timer Durations
+
+### Finding Timer Configuration
+
+The timer duration is likely configured in `useSetupStore.tsx` or passed as a prop to the test page.
+
+**Setup Store:**
+
+```typescript renderer/src/features/EGEL/hooks/useSetupStore.tsx:3-7
+type SimulationSettings = {
+  area: SimulationType;
+  timerEnabled: boolean;
+  duration: number;  // Duration in minutes or seconds
+  practiceMode: boolean;
+};
+```
+
+### Modifying Default Duration
+
+Find where `duration` is set (likely in `SetupPage.tsx`):
+
+```tsx
+// Before
+const [duration, setDuration] = useState(60);  // 60 minutes
+
+// After
+const [duration, setDuration] = useState(120);  // 120 minutes
+```
+
+Or create duration presets:
+
+```tsx
+const DURATION_PRESETS = {
+  short: 30,   // 30 minutes
+  medium: 60,  // 60 minutes
+  long: 120,   // 120 minutes
+};
+
+const handleSelectDuration = (preset: keyof typeof DURATION_PRESETS) => {
+  setDuration(DURATION_PRESETS[preset]);
+};
+```
+
+### Disabling the Timer
+
+Find the timer component (likely in `TestPage.tsx`) and modify the logic:
+
+```tsx
+// Before
+if (timerEnabled && timeRemaining === 0) {
+  handleSubmit();  // Auto-submit on timeout
+}
+
+// After
+if (timerEnabled && timeRemaining === 0) {
+  alert('Time is up! Please submit your test.');
+  // Don't auto-submit, let user review
+}
+```
+
+## Modifying Exam Scoring Logic
+
+### Current Scoring Approach
+
+Scoring likely happens in the test completion logic:
+
+```typescript
+const calculateScore = (answers: Record<string, number>, questions: EGELQuestion[]) => {
+  let correct = 0;
+  
+  questions.forEach((q) => {
+    if (answers[q.id] === q.correctAnswerIndex) {
+      correct++;
+    }
+  });
+  
+  return {
+    correct,
+    total: questions.length,
+    score: (correct / questions.length) * 100,
+  };
+};
+```
+
+### Custom Scoring Examples
+
+<AccordionGroup>
+  <Accordion title="Weighted Scoring by Question Type" icon="scale-balanced">
+    ```typescript
+    const calculateWeightedScore = (answers: Record<string, number>, questions: EGELQuestion[]) => {
+      const weights = {
+        disciplinary: 2,   // Worth 2 points
+        transversal: 1,    // Worth 1 point
+      };
+      
+      let totalPoints = 0;
+      let maxPoints = 0;
+      
+      questions.forEach((q) => {
+        const weight = weights[q.block] || 1;
+        maxPoints += weight;
+        
+        if (answers[q.id] === q.correctAnswerIndex) {
+          totalPoints += weight;
+        }
+      });
+      
+      return {
+        totalPoints,
+        maxPoints,
+        score: (totalPoints / maxPoints) * 100,
+      };
+    };
+    ```
+  </Accordion>
+
+  <Accordion title="Penalty for Wrong Answers" icon="minus">
+    ```typescript
+    const calculateScoreWithPenalty = (answers: Record<string, number>, questions: EGELQuestion[]) => {
+      let score = 0;
+      
+      questions.forEach((q) => {
+        const userAnswer = answers[q.id];
+        
+        if (userAnswer === undefined) {
+          score += 0;  // No answer = 0 points
+        } else if (userAnswer === q.correctAnswerIndex) {
+          score += 1;  // Correct = +1 point
+        } else {
+          score -= 0.25;  // Wrong = -0.25 points
+        }
+      });
+      
+      return {
+        score: Math.max(0, score),  // Don't allow negative scores
+        total: questions.length,
+      };
+    };
+    ```
+  </Accordion>
+
+  <Accordion title="Partial Credit for Multiple Choice" icon="percent">
+    ```typescript
+    // If questions have difficulty ratings
+    interface EGELQuestionWithDifficulty extends EGELQuestion {
+      difficulty: 'easy' | 'medium' | 'hard';
+    }
+    
+    const calculateScoreWithDifficulty = (
+      answers: Record<string, number>,
+      questions: EGELQuestionWithDifficulty[]
+    ) => {
+      const points = {
+        easy: 1,
+        medium: 2,
+        hard: 3,
+      };
+      
+      let earnedPoints = 0;
+      let maxPoints = 0;
+      
+      questions.forEach((q) => {
+        const questionPoints = points[q.difficulty];
+        maxPoints += questionPoints;
+        
+        if (answers[q.id] === q.correctAnswerIndex) {
+          earnedPoints += questionPoints;
+        }
+      });
+      
+      return {
+        earnedPoints,
+        maxPoints,
+        percentage: (earnedPoints / maxPoints) * 100,
+      };
+    };
+    ```
+  </Accordion>
+
+  <Accordion title="Time-Based Bonus" icon="stopwatch">
+    ```typescript
+    const calculateScoreWithTimeBonus = (
+      answers: Record<string, number>,
+      questions: EGELQuestion[],
+      timeRemaining: number,  // in seconds
+      totalTime: number
+    ) => {
+      let correct = 0;
+      questions.forEach((q) => {
+        if (answers[q.id] === q.correctAnswerIndex) correct++;
+      });
+      
+      const baseScore = (correct / questions.length) * 100;
+      
+      // Bonus: up to 10% for finishing with >50% time remaining
+      const timeRatio = timeRemaining / totalTime;
+      const timeBonus = timeRatio > 0.5 ? 10 * (timeRatio - 0.5) * 2 : 0;
+      
+      return {
+        baseScore,
+        timeBonus,
+        finalScore: Math.min(100, baseScore + timeBonus),
+      };
+    };
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Adding New Question Types
+
+### Current Question Structure
+
+All questions use a multiple-choice format with a single correct answer.
+
+### Supporting Multiple Correct Answers
+
+**Step 1:** Update the question type:
+
+```typescript
+interface MultiSelectQuestion extends EGELQuestion {
+    type: 'multi-select';
+    correctAnswerIndices: number[];  // Multiple correct answers
+}
+
+type Question = EGELQuestion | MultiSelectQuestion;
+```
+
+**Step 2:** Update rendering logic:
+
+```tsx
+{question.type === 'multi-select' ? (
+  // Render checkboxes instead of radio buttons
+  question.options.map((opt, idx) => (
+    <label key={idx}>
+      <input
+        type="checkbox"
+        checked={selectedAnswers[question.id]?.includes(idx)}
+        onChange={() => handleToggleAnswer(question.id, idx)}
+      />
+      {opt}
+    </label>
+  ))
+) : (
+  // Existing radio button logic
+)}
+```
+
+**Step 3:** Update scoring:
+
+```typescript
+const isMultiSelectCorrect = (userAnswers: number[], correctAnswers: number[]) => {
+  if (userAnswers.length !== correctAnswers.length) return false;
+  return userAnswers.every(a => correctAnswers.includes(a));
+};
+```
+
+### Adding True/False Questions
+
+```typescript
+interface TrueFalseQuestion {
+    id: string;
+    question: string;
+    correctAnswer: boolean;
+    block: "disciplinary" | "transversal";
+}
+```
+
+Render as:
+
+```tsx
+<div>
+  <button onClick={() => handleAnswer(question.id, true)}>True</button>
+  <button onClick={() => handleAnswer(question.id, false)}>False</button>
+</div>
+```
+
+## Modifying Practice Mode Behavior
+
+### Current Practice Mode
+
+```typescript renderer/src/features/EGEL/hooks/useSetupStore.tsx:7
+practiceMode: boolean;
+```
+
+Practice mode likely disables scoring or shows correct answers immediately.
+
+### Showing Immediate Feedback
+
+```tsx
+const handleAnswerSelect = (questionId: string, answerIndex: number) => {
+  setUserAnswers(prev => ({ ...prev, [questionId]: answerIndex }));
+  
+  if (practiceMode) {
+    const question = questions.find(q => q.id === questionId);
+    const isCorrect = answerIndex === question.correctAnswerIndex;
+    
+    // Show immediate feedback
+    if (isCorrect) {
+      toast.success('Correct!');
+    } else {
+      toast.error(`Wrong. Correct answer: ${question.options[question.correctAnswerIndex]}`);
+    }
+  }
+};
+```
+
+### Allowing Question Review
+
+```tsx
+if (practiceMode) {
+  return (
+    <div>
+      {questions.map((q, idx) => (
+        <div key={q.id}>
+          <p>{q.question}</p>
+          {q.options.map((opt, optIdx) => (
+            <div
+              key={optIdx}
+              className={classNames({
+                'bg-green-100': optIdx === q.correctAnswerIndex,
+                'bg-red-100': userAnswers[q.id] === optIdx && optIdx !== q.correctAnswerIndex,
+              })}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Adding New Blocks/Categories
+
+### Extending Block Types
+
+Currently supports `"disciplinary"` and `"transversal"`. To add more:
+
+```typescript
+type BlockType = "disciplinary" | "transversal" | "general" | "advanced";
+
+interface EGELQuestion {
+    // ...
+    block: BlockType;
+}
+```
+
+Update the filter logic:
+
+```typescript renderer/src/features/EGEL/services/questions.ts:53-66
+const typeMap = {
+    disciplinar: "disciplinary",
+    transversal: "transversal",
+    general: "general",
+    avanzado: "advanced",
+    todas: "todas",
+} as const;
+
+export function getQuestions(type: keyof typeof typeMap = "todas"): EGELQuestion[] {
+    if (type === "todas") return questions;
+    const mappedType = typeMap[type];
+    return questions.filter(q => q.block === mappedType);
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Version Control for Questions" icon="code-branch">
+    - Keep question changes in separate commits
+    - Use descriptive commit messages: `"Add 10 questions on data structures"`
+    - Tag releases when question banks are stable
+    - Consider splitting questions into multiple files if the bank grows large
+  </Accordion>
+
+  <Accordion title="Testing Custom Changes" icon="flask">
+    Always test customizations in development mode:
+    
+    ```bash
+    npm run dev
+    ```
+    
+    Verify:
+    - Questions render correctly (especially Markdown formatting)
+    - Scoring logic produces expected results
+    - Timer behavior works as intended
+    - UI changes don't break responsiveness
+  </Accordion>
+
+  <Accordion title="Rebuilding After Changes" icon="hammer">
+    After modifying renderer code:
+    
+    ```bash
+    cd renderer
+    npm run build
+    cd ..
+    npm run build  # Packages the app with updated renderer
+    ```
+    
+    The packaged app will be in `dist/`.
+  </Accordion>
+
+  <Accordion title="Maintaining Question Quality" icon="circle-check">
+    - Ensure all questions have exactly one correct answer (for single-select)
+    - Validate `correctAnswerIndex` is within bounds: `0 <= index < options.length`
+    - Test questions for clarity and unambiguous wording
+    - Verify code snippets in questions use proper syntax
+    - Add subtopic tags for analytics and filtering
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  **Breaking Changes**
+  
+  - Changing the `EGELQuestion` interface requires updating all consumers (test page, scoring logic, filtering)
+  - Modifying Zustand store schemas may break persistence (clear localStorage if structure changes)
+  - Timer logic changes may affect existing tests in progress
+</Warning>
+
+## Common Customization Scenarios
+
+<CardGroup cols={2}>
+  <Card title="Changing Exam Duration" icon="clock">
+    Edit `useSetupStore.tsx` default duration value
+  </Card>
+  <Card title="Adding New Questions" icon="plus">
+    Append to `questions.ts` array and rebuild
+  </Card>
+  <Card title="Custom Scoring Formula" icon="calculator">
+    Modify the scoring function in test completion logic
+  </Card>
+  <Card title="UI Color Scheme" icon="palette">
+    Update CSS variables in `index.css`
+  </Card>
+  <Card title="Question Categories" icon="tags">
+    Extend `BlockType` and update filter logic
+  </Card>
+  <Card title="Practice Mode Feedback" icon="lightbulb">
+    Add immediate answer validation in event handlers
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/advanced/architecture">
+    Understand the codebase structure before customizing
+  </Card>
+  <Card title="Data Storage" icon="database" href="/advanced/data-storage">
+    Learn how test results and history are persisted
+  </Card>
+</CardGroup>

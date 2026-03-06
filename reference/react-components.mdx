@@ -1,0 +1,766 @@
+---
+title: React Components & Hooks
+description: Complete reference for EGEL Simulator's React components, Zustand stores, and custom hooks
+---
+
+## Overview
+
+EGEL Simulator's frontend is built with React, TypeScript, and Zustand for state management. This reference covers key components, hooks, and stores used throughout the application.
+
+## Component Architecture
+
+```
+renderer/src/
+├── features/
+│   ├── EGEL/
+│   │   ├── components/
+│   │   │   └── Question.tsx
+│   │   └── hooks/
+│   │       ├── useQuestions.tsx
+│   │       ├── useSetupStore.tsx
+│   │       └── useHistoryStore.tsx
+│   └── auth/
+│       ├── components/
+│       │   ├── AuthLoader.tsx
+│       │   └── ProtectedRoute.tsx
+│       └── hooks/
+│           └── useLicenseStore.tsx
+├── pages/
+│   ├── HomePage.tsx
+│   ├── SetupPage.tsx
+│   ├── TestPage.tsx
+│   ├── HistoryPage.tsx
+│   └── AuthPage.tsx
+└── routes/
+    └── routes.tsx
+```
+
+---
+
+## Core Components
+
+### Question Component
+
+Displays an EGEL exam question with multiple-choice options and feedback.
+
+#### Component Definition
+
+```tsx
+import ReactMarkdown from 'react-markdown'
+
+type Props = {
+    question: EGELQuestion
+    selectedAnswer?: number
+    onSelect: (index: number) => void
+    showFeedback: boolean
+    mode: "simulacro" | "practica"
+    allowMultipleSelection?: boolean
+}
+
+export const Question: React.FC<Props> = ({
+    question,
+    selectedAnswer,
+    onSelect,
+    showFeedback,
+    mode,
+    allowMultipleSelection,
+}) => {
+    return (
+        <div className="w-full max-w-2xl mx-auto bg-white px-4 py-5 rounded-2xl shadow-md border border-gray-200">
+            <div>
+                <h2 className="text-lg md:text-xl font-serif font-semibold text-gray-800 mb-4">
+                    <ReactMarkdown>{question.question}</ReactMarkdown>
+                </h2>
+
+                <div className="space-y-3">
+                    {question.options.map((option, index) => {
+                        const isSelected = selectedAnswer === index;
+
+                        return (
+                            <div
+                                key={index}
+                                onClick={() => {
+                                    if (!allowMultipleSelection && selectedAnswer !== undefined) return;
+                                    onSelect(index);
+                                }}
+                                className={`flex items-start px-5 py-3 rounded-xl border cursor-pointer
+                                    ${isSelected
+                                        ? "bg-emerald-100 border-emerald-300"
+                                        : "bg-white border-gray-300 hover:bg-emerald-50"
+                                    }`}
+                            >
+                                <div className="font-semibold text-gray-700 mr-3">
+                                    {String.fromCharCode(65 + index)}.
+                                </div>
+                                <div className="text-gray-800 text-sm">
+                                    <ReactMarkdown>{option}</ReactMarkdown>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {showFeedback && mode === "practica" && (
+                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl text-blue-800">
+                        <strong>Respuesta correcta:</strong>{" "}
+                        <span className="font-medium">
+                            {String.fromCharCode(65 + question.correctAnswerIndex)}. 
+                            {question.options[question.correctAnswerIndex]}
+                        </span>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+```
+
+#### Props
+
+<ParamField path="question" type="EGELQuestion" required>
+  Question data object containing text, options, and correct answer
+</ParamField>
+
+<ParamField path="selectedAnswer" type="number">
+  Index of the currently selected answer (0-based)
+</ParamField>
+
+<ParamField path="onSelect" type="(index: number) => void" required>
+  Callback fired when an option is clicked
+</ParamField>
+
+<ParamField path="showFeedback" type="boolean" required>
+  Whether to display the correct answer feedback
+</ParamField>
+
+<ParamField path="mode" type="'simulacro' | 'practica'" required>
+  Question display mode:
+  - `simulacro`: Exam simulation (no feedback)
+  - `practica`: Practice mode (shows correct answer)
+</ParamField>
+
+<ParamField path="allowMultipleSelection" type="boolean">
+  If `true`, allows changing the selected answer. If `false`, answer is locked after first selection.
+</ParamField>
+
+#### EGELQuestion Type
+
+```typescript
+interface EGELQuestion {
+    question: string;           // Question text (supports Markdown)
+    options: string[];          // Array of answer options
+    correctAnswerIndex: number; // Index of correct answer (0-based)
+    category?: string;          // Optional category/topic
+}
+```
+
+#### Features
+
+- **Markdown Support**: Questions and options are rendered with `ReactMarkdown`
+- **Visual Feedback**: Selected answers have emerald background
+- **Answer Locking**: In simulacro mode, prevents changing answer after selection
+- **Alphabetic Labels**: Options labeled A, B, C, D, etc.
+- **Practice Mode Feedback**: Shows correct answer after selection
+
+#### Usage Example
+
+```tsx
+import { Question } from '@/features/EGEL/components/Question';
+
+const [selectedAnswer, setSelectedAnswer] = useState<number>();
+
+const question: EGELQuestion = {
+    question: "¿Cuál es la capital de Francia?",
+    options: ["Londres", "Berlín", "París", "Madrid"],
+    correctAnswerIndex: 2
+};
+
+<Question
+    question={question}
+    selectedAnswer={selectedAnswer}
+    onSelect={setSelectedAnswer}
+    showFeedback={selectedAnswer !== undefined}
+    mode="practica"
+    allowMultipleSelection={false}
+/>
+```
+
+---
+
+### AuthLoader Component
+
+Handles license verification on app startup and redirects users based on license validity.
+
+#### Component Definition
+
+```tsx
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useLicenseStore } from '../hooks/useLicenseStore';
+
+export function AuthLoader() {
+    const { isValid, loading } = useLicenseStore();
+    const navigate = useNavigate();
+
+    React.useEffect(() => {
+        if (!loading && isValid !== null) {
+            navigate(isValid ? '/home' : '/auth', { replace: true });
+        }
+    }, [isValid, loading, navigate]);
+
+    if (loading) return <p>Validando licencia...</p>;
+    return null;
+}
+```
+
+#### Behavior
+
+1. **On Mount**: Retrieves license validation state from `useLicenseStore`
+2. **During Loading**: Displays "Validando licencia..." message
+3. **After Validation**:
+   - **Valid License**: Navigates to `/home`
+   - **Invalid/No License**: Navigates to `/auth`
+4. **Replace History**: Uses `replace: true` to prevent back button issues
+
+#### Usage Example
+
+```tsx
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthLoader } from '@/features/auth/components/AuthLoader';
+
+function App() {
+    return (
+        <BrowserRouter>
+            <Routes>
+                <Route path="/" element={<AuthLoader />} />
+                <Route path="/auth" element={<AuthPage />} />
+                <Route path="/home" element={<HomePage />} />
+            </Routes>
+        </BrowserRouter>
+    );
+}
+```
+
+<Note>
+  Place `AuthLoader` as the initial route (`/`) to validate licenses before showing any content.
+</Note>
+
+---
+
+## Zustand Stores
+
+Zustand provides lightweight state management without React Context boilerplate.
+
+### useLicenseStore
+
+Manages license validation state for authentication.
+
+#### Store Definition
+
+```tsx
+import { create } from 'zustand';
+import { verifyLocalKey } from '../services/verifyLocalKey';
+
+interface LicenseState {
+    isValid: boolean | null;
+    loading: boolean;
+    refresh: () => Promise<void>;
+}
+
+export const useLicenseStore = create<LicenseState>((set) => ({
+    isValid: null,
+    loading: true,
+    refresh: async () => {
+        set({ loading: true });
+        const valid = await verifyLocalKey();
+        set({ isValid: valid, loading: false });
+    },
+}));
+```
+
+#### State
+
+<ParamField path="isValid" type="boolean | null">
+  License validation status:
+  - `true`: Valid license exists
+  - `false`: Invalid or no license
+  - `null`: Not yet validated
+</ParamField>
+
+<ParamField path="loading" type="boolean">
+  Whether validation is in progress
+</ParamField>
+
+#### Actions
+
+<ParamField path="refresh" type="() => Promise<void>">
+  Re-validates the license by calling `verifyLocalKey()` through IPC
+</ParamField>
+
+#### Usage Example
+
+```tsx
+import { useLicenseStore } from '@/features/auth/hooks/useLicenseStore';
+
+function LicenseStatus() {
+    const { isValid, loading, refresh } = useLicenseStore();
+
+    if (loading) return <p>Checking license...</p>;
+    if (!isValid) return <p>No valid license</p>;
+
+    return (
+        <div>
+            <p>License is valid</p>
+            <button onClick={refresh}>Refresh</button>
+        </div>
+    );
+}
+```
+
+#### Initialization
+
+Call `refresh()` on app mount:
+
+```tsx
+import { useEffect } from 'react';
+import { useLicenseStore } from '@/features/auth/hooks/useLicenseStore';
+
+function App() {
+    const refresh = useLicenseStore(state => state.refresh);
+
+    useEffect(() => {
+        refresh();
+    }, []);
+
+    return <AuthLoader />;
+}
+```
+
+---
+
+### useSetupStore
+
+Stores simulation configuration settings.
+
+#### Store Definition
+
+```tsx
+import { create } from "zustand";
+
+type SimulationSettings = {
+    area: SimulationType;
+    timerEnabled: boolean;
+    duration: number;
+    practiceMode: boolean;
+};
+
+type SetupStore = {
+    config: SimulationSettings | null;
+    setConfig: (config: SimulationSettings) => void;
+    resetConfig: () => void;
+};
+
+export const useSetupStore = create<SetupStore>((set) => ({
+    config: null,
+    setConfig: (config) => set({ config }),
+    resetConfig: () => set({ config: null }),
+}));
+```
+
+#### State
+
+<ParamField path="config" type="SimulationSettings | null">
+  Current simulation configuration or `null` if not set
+</ParamField>
+
+#### Actions
+
+<ParamField path="setConfig" type="(config: SimulationSettings) => void">
+  Updates the simulation configuration
+</ParamField>
+
+<ParamField path="resetConfig" type="() => void">
+  Clears the configuration (resets to `null`)
+</ParamField>
+
+#### SimulationSettings Type
+
+<ParamField path="area" type="SimulationType">
+  Question category/area (e.g., "ambas", "matematicas", "ciencias")
+</ParamField>
+
+<ParamField path="timerEnabled" type="boolean">
+  Whether to enable countdown timer
+</ParamField>
+
+<ParamField path="duration" type="number">
+  Timer duration in minutes
+</ParamField>
+
+<ParamField path="practiceMode" type="boolean">
+  If `true`, shows correct answers after selection
+</ParamField>
+
+#### Usage Example
+
+```tsx
+import { useSetupStore } from '@/features/EGEL/hooks/useSetupStore';
+
+function SetupPage() {
+    const setConfig = useSetupStore(state => state.setConfig);
+
+    const handleStart = () => {
+        setConfig({
+            area: 'ambas',
+            timerEnabled: true,
+            duration: 60,
+            practiceMode: false
+        });
+        navigate('/test');
+    };
+
+    return <button onClick={handleStart}>Start Exam</button>;
+}
+```
+
+---
+
+### useHistoryStore
+
+Persists exam history across app sessions.
+
+#### Store Definition
+
+```tsx
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+export interface HistoryItem {
+    id: string;
+    date: string;
+    time: string;
+    score: number;
+    correct: number;
+    total: number;
+    type: SimulationType;
+    timerEnabled?: boolean;
+    practiceMode?: boolean;
+}
+
+interface HistoryState {
+    history: HistoryItem[];
+    addEntry: (entry: Omit<HistoryItem, 'id'>) => void;
+    clearHistory: () => void;
+}
+
+export const useHistoryStore = create<HistoryState>()(persist(
+    (set, get) => ({
+        history: [],
+        addEntry: (entry) => {
+            const newEntry: HistoryItem = {
+                id: crypto.randomUUID(),
+                ...entry,
+            };
+            set({ history: [newEntry, ...get().history] });
+        },
+        clearHistory: () => set({ history: [] }),
+    }),
+    {
+        name: 'sim-history-store',
+    }
+));
+```
+
+#### State
+
+<ParamField path="history" type="Array<HistoryItem>">
+  Array of completed exam sessions, newest first
+</ParamField>
+
+#### Actions
+
+<ParamField path="addEntry" type="(entry: Omit<HistoryItem, 'id'>) => void">
+  Adds a new exam result to history. Auto-generates UUID for `id`.
+</ParamField>
+
+<ParamField path="clearHistory" type="() => void">
+  Deletes all history entries
+</ParamField>
+
+#### HistoryItem Type
+
+<ParamField path="id" type="string">
+  Unique identifier (UUID)
+</ParamField>
+
+<ParamField path="date" type="string">
+  Exam date (ISO format or formatted string)
+</ParamField>
+
+<ParamField path="time" type="string">
+  Time taken to complete exam
+</ParamField>
+
+<ParamField path="score" type="number">
+  Percentage score (0-100)
+</ParamField>
+
+<ParamField path="correct" type="number">
+  Number of correct answers
+</ParamField>
+
+<ParamField path="total" type="number">
+  Total number of questions
+</ParamField>
+
+<ParamField path="type" type="SimulationType">
+  Question category used
+</ParamField>
+
+<ParamField path="timerEnabled" type="boolean">
+  Whether timer was enabled for this session
+</ParamField>
+
+<ParamField path="practiceMode" type="boolean">
+  Whether practice mode was enabled
+</ParamField>
+
+#### Persistence
+
+Data is automatically saved to `localStorage` with key `sim-history-store`.
+
+#### Usage Example
+
+```tsx
+import { useHistoryStore } from '@/features/EGEL/hooks/useHistoryStore';
+
+function TestPage() {
+    const addEntry = useHistoryStore(state => state.addEntry);
+
+    const handleFinish = (results) => {
+        addEntry({
+            date: new Date().toISOString(),
+            time: '45:30',
+            score: 85,
+            correct: 17,
+            total: 20,
+            type: 'ambas',
+            timerEnabled: true,
+            practiceMode: false
+        });
+        navigate('/history');
+    };
+
+    return <button onClick={handleFinish}>Finish Exam</button>;
+}
+```
+
+---
+
+## Custom Hooks
+
+### useQuestions
+
+Fetches EGEL questions based on simulation type.
+
+#### Hook Definition
+
+```tsx
+import { useEffect, useState } from "react";
+import { getQuestions } from "../services/questions";
+
+export function useQuestions(type: SimulationType = "ambas") {
+    const [questions, setQuestions] = useState<EGELQuestion[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
+
+    useEffect(() => {
+        const fetchQuestions = async () => {
+            try {
+                const data = getQuestions(type);
+                setQuestions(data);
+            } catch (error) {
+                console.error("Error al obtener preguntas:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchQuestions();
+    }, [type]);
+
+    return {
+        questions,
+        loading,
+    };
+}
+```
+
+#### Parameters
+
+<ParamField path="type" type="SimulationType" default="ambas">
+  Question category to fetch
+</ParamField>
+
+#### Return Value
+
+<ResponseField name="questions" type="Array<EGELQuestion>">
+  Array of fetched questions
+</ResponseField>
+
+<ResponseField name="loading" type="boolean">
+  Whether questions are still loading
+</ResponseField>
+
+#### Usage Example
+
+```tsx
+import { useQuestions } from '@/features/EGEL/hooks/useQuestions';
+
+function TestPage() {
+    const config = useSetupStore(state => state.config);
+    const { questions, loading } = useQuestions(config?.area);
+
+    if (loading) return <p>Loading questions...</p>;
+
+    return (
+        <div>
+            {questions.map((q, i) => (
+                <Question key={i} question={q} {...props} />
+            ))}
+        </div>
+    );
+}
+```
+
+---
+
+## Type Definitions
+
+### Global Types
+
+```typescript
+type SimulationType = "ambas" | "matematicas" | "ciencias" | "ingenieria";
+
+interface EGELQuestion {
+    question: string;
+    options: string[];
+    correctAnswerIndex: number;
+    category?: string;
+}
+
+interface LicenseActivation {
+    id: number;
+    productKey: string;
+    machineId: string;
+    careerId?: string;
+    activatedAt: Date;
+    signature: string;
+}
+```
+
+---
+
+## Component Communication Patterns
+
+<Tabs>
+  <Tab title="License Validation Flow">
+    ```
+    App Mount
+      ↓
+    useLicenseStore.refresh()
+      ↓
+    window.api.licenseActivation.verifyLocalActivation()
+      ↓
+    IPC → Main Process
+      ↓
+    Database Query + Signature Verification
+      ↓
+    useLicenseStore.isValid = true/false
+      ↓
+    AuthLoader redirects to /home or /auth
+    ```
+  </Tab>
+  
+  <Tab title="Exam Setup Flow">
+    ```
+    SetupPage
+      ↓
+    User configures exam settings
+      ↓
+    useSetupStore.setConfig({ area, timer, mode })
+      ↓
+    Navigate to /test
+      ↓
+    TestPage reads config from store
+      ↓
+    useQuestions(config.area) fetches questions
+      ↓
+    Render Question components
+    ```
+  </Tab>
+  
+  <Tab title="History Recording Flow">
+    ```
+    TestPage
+      ↓
+    User completes exam
+      ↓
+    Calculate results (score, time, correct)
+      ↓
+    useHistoryStore.addEntry({ ...results })
+      ↓
+    Zustand persist middleware saves to localStorage
+      ↓
+    Navigate to /history
+      ↓
+    HistoryPage displays all entries
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Best Practices
+
+### State Management
+
+<Note>
+  **Use Zustand for global state** (license, setup, history) and **React useState for local component state** (selected answer, form inputs).
+</Note>
+
+### IPC Communication
+
+```tsx
+// ✅ Good: Error handling
+const result = await window.api.licenseActivation.verifyLocalActivation();
+if (!result.success) {
+    console.error(result.error.message);
+    return;
+}
+const license = result.data;
+
+// ❌ Bad: No error handling
+const license = (await window.api.licenseActivation.verifyLocalActivation()).data;
+```
+
+### Component Composition
+
+```tsx
+// ✅ Good: Small, focused components
+<Question question={q} onSelect={handleSelect} />
+
+// ❌ Bad: Monolithic components
+<TestPage /> // Contains all exam logic, rendering, timer, etc.
+```
+
+---
+
+## Next Steps
+
+<Card title="IPC Handlers" icon="arrows-left-right" href="/reference/ipc-handlers">
+  Learn how React components communicate with the main process
+</Card>
+
+<Card title="Database Schema" icon="database" href="/reference/database-schema">
+  Understand the data structures used in license management
+</Card>

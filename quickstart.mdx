@@ -1,80 +1,251 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get started with EGEL Simulator in minutes—from installation to taking your first practice exam
 ---
 
-## Get started in three steps
+# Quick Start Guide
 
-Get your documentation site running locally and make your first customization.
+This guide will walk you through getting EGEL Simulator up and running in just a few minutes. You'll go from installation to taking your first practice exam.
 
-### Step 1: Set up your local environment
+## Prerequisites
+
+Before you begin, make sure you have:
+
+- EGEL Simulator is [installed](/installation) on your system
+- A valid product key (received with your purchase)
+- Internet connection (for initial license activation only)
+
+## Step 1: Launch the Application
+
+Open EGEL Simulator from your applications menu or desktop shortcut. On first launch, you'll see the authentication page prompting you to activate your license.
+
+## Step 2: Activate Your License
+
+<Steps>
+  <Step title="Enter Your Product Key">
+    The product key is a UUID format key (e.g., `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`). The input field automatically formats as you type.
+    
+    ```
+    Example: 12345678-1234-1234-1234-123456789abc
+    ```
+    
+    <Note>
+      Product keys are case-insensitive and formatted automatically. Only hexadecimal characters (0-9, a-f) and hyphens are accepted.
+    </Note>
+  </Step>
+  
+  <Step title="Validate the Key">
+    Click **"Validar clave"** to validate your product key. The app will:
+    
+    1. Check the UUID format
+    2. Connect to the remote license server (Supabase)
+    3. Verify the key exists and isn't already activated on another device
+    4. Bind the license to your machine ID using HMAC-SHA256 signature
+    
+    This process typically takes 2-3 seconds.
+  </Step>
+  
+  <Step title="Activation Complete">
+    Once validated successfully, you'll see a success message and the app automatically navigates to the home page.
+    
+    <Tip>
+      Your license is now tied to this specific device. The activation is stored locally in SQLite and validated on each app launch.
+    </Tip>
+  </Step>
+</Steps>
+
+### Troubleshooting Activation
 
 <AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+  <Accordion title="Invalid Product Key Format">
+    **Error**: "Formato de clave inválido. Debe ser un UUID válido."
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
+    **Solution**: Ensure your key matches the UUID format with 5 groups: `8-4-4-4-12` characters.
   </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+  
+  <Accordion title="Key Already Activated">
+    **Error**: "Esta clave ya está activada en otro dispositivo"
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
+    **Solution**: Each key can only be activated on one device. Contact support to deactivate the previous device or obtain a new key.
+  </Accordion>
+  
+  <Accordion title="Key Not Found">
+    **Error**: "Clave de producto no encontrada"
+    
+    **Solution**: Verify you copied the entire product key correctly. Check your purchase confirmation email for the correct key.
+  </Accordion>
+  
+  <Accordion title="Network Error">
+    **Error**: Network or connection timeout
+    
+    **Solution**: Ensure you have internet connectivity. The initial activation requires connecting to the license server.
   </Accordion>
 </AccordionGroup>
 
-### Step 2: Deploy your changes
+For more detailed information, see the [License Activation Guide](/guide/license-activation).
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+## Step 3: Navigate the Home Page
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
+After successful activation, you'll land on the home page. The home page provides access to:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Start Exam" icon="play">
+    Configure and start a new practice session or simulation
+  </Card>
+  <Card title="View History" icon="clock-rotate-left">
+    Review your past test results and performance
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+The home page shows:
+- Welcome message
+- Quick action buttons
+- Recent activity (if any previous tests exist)
+
+## Step 4: Configure Your First Test
+
+Click **"Configurar Examen"** or the setup button to configure your test parameters.
+
+<Steps>
+  <Step title="Select Study Area">
+    Choose which question bank to practice from:
+    
+    <Tabs>
+      <Tab title="Disciplinar">
+        Focus on discipline-specific content for your field of study. Questions test technical knowledge in your specialization.
+      </Tab>
+      <Tab title="Transversal">
+        Practice transversal competencies that apply across all disciplines—critical thinking, problem-solving, and general skills.
+      </Tab>
+      <Tab title="Ambas áreas">
+        Mix questions from both disciplinary and transversal areas for comprehensive preparation.
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="Choose Exam Mode">
+    Select your study mode:
+    
+    - **Practice Mode**: Get immediate feedback after each answer. Great for learning and understanding concepts.
+    - **Simulation Mode**: No immediate feedback—just like the real exam. Best for testing your readiness.
+    
+    <Tip>
+      Start with Practice Mode to learn the material, then switch to Simulation Mode to test yourself under exam conditions.
+    </Tip>
+  </Step>
+  
+  <Step title="Configure Timer">
+    Decide whether to enable the countdown timer:
+    
+    - **Timer Enabled**: Simulates time pressure (default: 40,000 seconds ≈ 11 hours)
+    - **Timer Disabled**: Practice without time limits
+    
+    The timer displays in the top-right corner and turns red when less than 5 minutes remain.
+  </Step>
+  
+  <Step title="Start the Test">
+    Click **"Iniciar simulacro"** to begin. Your configuration is saved in the `useSetupStore` for the current session.
+  </Step>
+</Steps>
+
+<Info>
+  All configuration settings are stored locally and persist for the current test session. You can change settings for each new test.
+</Info>
+
+## Step 5: Take Your First Exam
+
+The exam interface displays:
+
+### Header Information
+- **Mode badge**: Shows "Modo Práctica" or "Simulacro"
+- **Question category**: Displays the block (disciplinary/transversal)
+- **Timer**: Countdown (if enabled)
+
+### Progress Bar
+A visual indicator showing your progress through the exam:
+- Current question number (e.g., "Pregunta 5 de 52")
+- Filled progress bar
+
+### Question Display
+Each question shows:
+- The question text (supports Markdown for code blocks)
+- Multiple choice options (A, B, C, D)
+- Immediate feedback in Practice Mode (correct answer highlighted)
+
+### Answering Questions
+
+1. **Select an answer** by clicking one of the options
+2. **In Practice Mode**: See immediate feedback—correct answer in green, incorrect in red
+3. **In Simulation Mode**: No feedback until the end
+4. **Click "Siguiente →"** to move to the next question
+
+<Warning>
+  You cannot change your answer once selected. The "Siguiente" button only enables after you choose an option.
+</Warning>
+
+### Navigation
+
+- **Salir**: Exit the exam early (progress is lost)
+- **Siguiente →**: Move to the next question
+- **Finalizar**: Submit the exam (shown on the last question)
+
+## Step 6: Review Your Results
+
+After completing the exam (clicking "Finalizar" on the last question), you're automatically redirected to the History page.
+
+### Understanding Your Score
+
+Your test result includes:
+
+| Metric | Description |
+|--------|-------------|
+| **Score** | Percentage correct (e.g., 70%) |
+| **Correct** | Number of correct answers |
+| **Total** | Total number of questions |
+| **Date** | Test completion date |
+| **Time** | Test completion time |
+| **Type** | Study area (disciplinar, transversal, ambas) |
+| **Mode** | Practice or Simulation |
+| **Timer** | Whether timer was enabled |
+
+### History Summary
+
+The History page shows:
+- **Total tests taken**
+- **Average score**
+- **Highest score**
+- **List of all past tests** with details
+
+<Tip>
+  Track your progress over time to identify which areas need more practice. Look for score trends and focus on areas with lower performance.
+</Tip>
+
+## Next Steps
+
+Now that you've completed your first test, here's what to do next:
+
+<CardGroup cols={2}>
+  <Card title="Explore Exam Modes" icon="graduation-cap" href="/features/exam-modes">
+    Learn the differences between Practice and Simulation modes
+  </Card>
+  <Card title="Configure Tests" icon="sliders" href="/guide/configuring-tests">
+    Master all configuration options for optimal study sessions
+  </Card>
+  <Card title="Review Features" icon="star" href="/features/question-banks">
+    Explore question banks and study materials
+  </Card>
+  <Card title="Analyze Results" icon="chart-line" href="/guide/reviewing-results">
+    Deep dive into performance tracking and improvement strategies
+  </Card>
+</CardGroup>
+
+## Tips for Effective Practice
+
+1. **Start with Practice Mode**: Get comfortable with the question format and learn from immediate feedback
+2. **Mix question types**: Use "Ambas áreas" to prepare comprehensively
+3. **Simulate exam conditions**: Once confident, switch to Simulation Mode with timer enabled
+4. **Track your progress**: Monitor score trends to identify improvement areas
+
+<Card title="Need Help?" icon="question">
+  If you encounter issues or have questions, check the [License Activation guide](/guide/license-activation) or contact support through the authentication page's "Contactar soporte" link.
+</Card>
