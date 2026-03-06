@@ -1,0 +1,97 @@
+{
+  "projectType": "saas",
+  "projectName": "EGEL Simulator",
+  "projectDescription": "A desktop application for practicing EGEL exams with multiple study modes, timer support, and detailed performance tracking.",
+  "theme": "linden",
+  "primaryColor": "#16a34a",
+  "lightColor": "#22c55e",
+  "darkColor": "#15803d",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/exam-modes",
+              "features/question-banks",
+              "features/timer-system",
+              "features/history-tracking"
+            ]
+          },
+          {
+            "group": "User Guide",
+            "pages": [
+              "guide/license-activation",
+              "guide/configuring-tests",
+              "guide/taking-exams",
+              "guide/reviewing-results"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/architecture",
+              "advanced/data-storage",
+              "advanced/customization"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Developer Guide",
+            "pages": [
+              "development/setup",
+              "development/project-structure",
+              "development/building"
+            ]
+          },
+          {
+            "group": "Technical Reference",
+            "pages": [
+              "reference/electron-main",
+              "reference/ipc-handlers",
+              "reference/database-schema",
+              "reference/react-components"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Practice and simulation exam modes",
+    "Disciplinary and transversal question banks",
+    "Configurable timer system",
+    "Immediate feedback in practice mode",
+    "Comprehensive test history and scoring",
+    "License-based activation system",
+    "Offline-first desktop application"
+  ],
+  "publicApiSurface": [
+    "licenseActivation:create",
+    "licenseActivation:findAll",
+    "licenseActivation:update",
+    "licenseActivation:delete",
+    "licenseActivation:activate",
+    "licenseActivation:deactivate",
+    "licenseActivation:validate",
+    "useLicenseStore",
+    "useSetupStore",
+    "useHistoryStore",
+    "useQuestions",
+    "getQuestions"
+  ]
+}
